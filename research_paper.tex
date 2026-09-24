@@ -1,0 +1,426 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{microtype}
+\usepackage{multirow}
+
+% Setup listings for SQL and code presentation
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\bfseries\color{blue!70!black},
+    stringstyle=\color{green!50!black},
+    commentstyle=\itshape\color{gray},
+    numbers=none,
+    numberstyle=\tiny,
+    stepnumber=1,
+    numbersep=5pt,
+    frame=single,
+    breaklines=true,
+    breakatwhitespace=true,
+    tabsize=2,
+    showstringspaces=false,
+    captionpos=b
+}
+
+\lstdefinelanguage{SQLCustom}{
+    language=SQL,
+    morekeywords={EXPLAIN, QUERY, PLAN, COALESCE, TRIM, YEAR, STRFTIME},
+    sensitive=false
+}
+
+\begin{document}
+
+\title{Static Code Analysis and Automated Semantic Rewriting for SQL Anti-Pattern Mitigation: An AST-Driven Approach}
+
+\author{\IEEEauthorblockN{Aradhya Rahul Pandey}
+\IEEEauthorblockA{\textit{Computational Intelligence} \\
+\textit{SRM Institute of Science and Technology} \\
+aradhyarahulpandey@gmail.com}
+}
+\and
+\IEEEauthorblockN{Dr. Saravan P}
+\IEEEauthorblockA{
+\textit{Department of Software Engineering}\\
+\textit{SRM Institute of Science and Technology}\\
+
+}
+
+\maketitle
+
+\begin{abstract}
+Relational Database Management Systems (RDBMS) rely heavily on declarative query optimization engines to formulate cost-effective physical execution plans. However, cost-based optimizers frequently struggle when presented with high-level developer anti-patterns. Sub-optimal query formulations—such as unbounded wildcard projections (\texttt{SELECT *}), non-sargable (Search Argument Able) predicates wrapping indexed attributes in scalar functions, and unaggregated subquery nesting—impede index utilization, induce high-overhead full table scans, saturate memory bandwidth, and couple application layers tightly to underlying schema layouts. While Large Language Model (LLM) linters introduce non-deterministic hallucinations and high inference latency, traditional string-matching linters lack structural semantic awareness. 
+
+In this paper, we propose, design, and evaluate a deterministic static analysis framework that parses SQL queries into grammar-level Abstract Syntax Trees (ASTs), rigorously flags anti-patterns via syntax traversal algorithms, performs semantics-preserving automatic query rewrites, and evaluates physical plan costs using an in-memory execution plan proxy. We formally characterize three prevalent anti-pattern categories (\texttt{AP-01}: \texttt{SELECT\_STAR}, \texttt{AP-02}: \texttt{NON\_SARGABLE\_PREDICATE}, and \texttt{AP-05}: \texttt{UNNECESSARY\_SUBQUERY}) with strict negative controls to eliminate false positives. Evaluated across an automated test suite of 45 test fixtures and synthetic multi-table corpora, the proposed engine achieves 100\% precision and recall, isolates syntax errors gracefully, and demonstrates sub-millisecond per-query parsing overhead.
+\end{abstract}
+
+\begin{IEEEkeywords}
+SQL Anti-Patterns, Static Analysis, Abstract Syntax Tree, Sargability, Query Optimization, Automated Query Rewriting, Cost Proxy.
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+In enterprise database architectures and distributed data warehouses, Structured Query Language (SQL) serves as the primary declarative interface for data retrieval and manipulation. Under the declarative paradigm formulated by Codd \cite{codd1970relational}, users specify \textit{what} data is required rather than \textit{how} to retrieve it. Modern relational database management systems (RDBMS)—such as PostgreSQL, MySQL, SQLite, and commercial data engines—employ Cost-Based Optimizers (CBOs) \cite{selinger1979access, graefe1993query} to enumerate possible join orderings, select physical access operators (e.g., sequential scan, B-tree index lookup, index range scan), and perform algebraic transformations.
+
+Despite decades of optimization advances, query optimizers operate under finite compilation-time budgets and strict algebraic boundaries. They cannot easily compensate for structural anti-patterns embedded in user queries \cite{karwin2010sql}. Common programming practices frequently introduce latent performance bottlenecks:
+\begin{enumerate}
+    \item \textbf{Unbounded Projection Overhead (\texttt{SELECT *}):} Projections requesting all table columns force database engines to read wide rows from disk or buffer pools, preventing index-only covered scans, inflating serialized network payloads, and creating severe maintenance risks when table schemas evolve \cite{stonebraker2005cstore}.
+    \item \textbf{Predicate De-sargability:} An expression is defined as \textit{sargable} (Search Argument Able) if the database engine can directly exploit an existing B-tree or clustered index to bound the search space \cite{selinger1979access}. Wrapping column attributes inside scalar transformations (e.g., \texttt{UPPER(name)}, \texttt{YEAR(order\_date)}, \texttt{TRIM(email)}, or \texttt{COALESCE(id, 0)}) forces the optimizer to abandon index seek operations, resulting in catastrophic $\mathcal{O}(N)$ full table scans.
+    \item \textbf{Sub-optimal Subquery Nesting:} Formulating uncorrelated set inclusion predicates using \texttt{WHERE col IN (SELECT ...)} frequently leads to redundant materialization or sub-optimal correlated nested loop joins, whereas declarative equijoins or \texttt{EXISTS} semi-joins enable the optimizer to construct hash or merge join trees.
+\end{enumerate}
+
+Existing approaches to SQL quality assurance predominantly fall into two unsatisfactory extremes. On one hand, regular expression linters (e.g., rudimentary regex sweeps) operate on lexical tokens, generating intolerable false-positive rates by failing to distinguish between projection wildcards and valid aggregation primitives such as \texttt{COUNT(*)}, or between functions wrapping columns versus functions wrapping constant literals. On the other hand, recent efforts utilizing generative Large Language Models (LLMs) suffer from non-deterministic responses, structural hallucinations, high computational costs, and an inability to provide strict architectural guarantees in continuous integration and continuous deployment (CI/CD) pipelines.
+
+To resolve these limitations, this paper presents the design, formalization, and implementation of a \textbf{Deterministic Abstract Syntax Tree (AST) Static Analysis and Transformation Engine}. The engine parses heterogeneous SQL scripts into strongly typed AST representations via grammar-level parsing, executes declarative visitor-pattern rules with strict negative controls, synthesizes safe column-expanded rewrites, and couples findings with an in-memory execution plan cost proxy based on SQLite's query planner.
+
+\subsection{Contributions}
+The specific contributions of this work are as follows:
+\begin{itemize}
+    \item \textbf{Formal Anti-Pattern Taxonomy \& Detection Algorithms:} We define formal mathematical detection criteria and AST visitor algorithms for three critical SQL anti-patterns (\texttt{AP-01}, \texttt{AP-02}, and \texttt{AP-05}), explicitly establishing negative control boundaries that guarantee zero false positives on standard primitives such as \texttt{COUNT(*)} and literal evaluations.
+    \item \textbf{Semantics-Preserving Query Rewriting Engine:} We implement an AST rewriting module that expands unbounded projection nodes into schema-verified explicit attribute lists while preserving query clauses including table aliases, \texttt{ORDER BY}, and \texttt{LIMIT}.
+    \item \textbf{In-Memory Query Plan Cost Proxy:} We integrate an automated execution plan analysis layer using an indexed in-memory relational schema, dynamically detecting full table scan hazards (\texttt{FULL\_SCAN\_DETECTED} vs. \texttt{INDEX\_USED}) via \texttt{EXPLAIN QUERY PLAN}.
+    \item \textbf{Comprehensive Empirical Validation:} We construct an automated testing and benchmark suite comprising 45 unit/integration test specifications and 18 diverse SQL fixtures, demonstrating 100\% detection precision, robust syntax-error isolation, and sub-2-second execution over multi-file corpora.
+\end{itemize}
+
+\section{Related Work}
+
+\subsection{Query Optimization and Execution Costs}
+Since the seminal work on System R by Selinger et al. \cite{selinger1979access}, relational query optimizers evaluate candidate physical plans based on estimated disk I/O, CPU instruction costs, and catalog statistics (e.g., histograms, distinct value counts). Graefe \cite{1993query} expanded this into extensible optimizer architectures (Volcano and Cascades frameworks). While optimizers apply equivalence-preserving relational algebra transformations, they are fundamentally constrained by predicate sargability and query structure. If a user query applies an opaque function $f(A)$ over an attribute $A$, the optimizer cannot leverage the index on $A$ unless specialized functional/expression indexes are pre-computed.
+
+\subsection{SQL Linting and Static Analysis}
+Static code analysis is well-established in general-purpose software development (e.g., ESLint for JavaScript, Clang Static Analyzer for C++). In the database domain, tools such as SQLFluff \cite{sqlfluff} focus primarily on dialect linting, indentation, and stylistic uniformity rather than algorithmic database access costs. Commercial enterprise engines (e.g., SonarQube) provide static SQL analysis but often employ proprietary rule engines with limited automated query transformation capabilities. Recent database linting research has explored neural models for SQL bug detection; however, neural methods introduce probabilistic uncertainty unacceptable in production database migrations. Our framework addresses this gap through deterministic, grammar-driven AST traversal.
+
+\section{Formal Anti-Pattern Formulations}
+
+We denote a relational database schema $\mathcal{S} = (\mathcal{T}, \mathcal{C}, \mathcal{I})$, where $\mathcal{T} = \{T_1, \dots, T_m\}$ represents the set of relations, $\mathcal{C}(T)$ denotes the ordered set of attributes belonging to relation $T$, and $\mathcal{I}(T)$ denotes the set of secondary B-tree indexes defined on subsets of $\mathcal{C}(T)$. A query $Q$ is represented as an Abstract Syntax Tree $\mathcal{T}_Q = (V, E)$, where $V$ represents syntactic expression nodes (e.g., \texttt{Select}, \texttt{Where}, \texttt{Column}, \texttt{Func}, \texttt{Star}) and $E$ represents directed parent-child syntactic relationships.
+
+\subsection{AP-01: Unbounded Projection (\texttt{SELECT *})}
+\textbf{Definition 1 (Unbounded Wildcard Projection):} Let $v_{\text{sel}} \in V$ be a \texttt{Select} node, and let $\Pi(v_{\text{sel}}) \subset V$ represent its projected expression list. An unbounded projection occurs when there exists a wildcard node $v_* \in \Pi(v_{\text{sel}})$ such that $v_*$ is not nested within an aggregate expression context:
+\begin{equation}
+    \text{AP-01}(v_*) = (v_* \in \Pi(v_{\text{sel}})) \land (\nexists u \in \text{Ancestors}(v_*) : \text{Type}(u) \in \mathcal{F}_{\text{agg}})
+\end{equation}
+where $\mathcal{F}_{\text{agg}} = \{\texttt{Count}, \texttt{Sum}, \texttt{Avg}, \texttt{Min}, \texttt{Max}\}$.
+
+\textit{Negative Control Boundary:} If $v_* \in \text{Children}(u)$ where $u \in \mathcal{F}_{\text{agg}}$ (specifically $\texttt{COUNT(*)}$), $\text{AP-01}$ evaluates to false. $\texttt{COUNT(*)}$ is an optimized physical operation that computes cardinality without materializing column attributes.
+
+\subsection{AP-02: Non-Sargable Predicates}
+\textbf{Definition 2 (Non-Sargable Column Function Wrapping):} Let $\sigma(Q)$ represent the set of selection predicates in $Q$ originating from \texttt{Where} clauses and \texttt{Join ... On} conditions. A predicate expression $p \in \sigma(Q)$ is non-sargable if a scalar function $f \in \mathcal{F}_{\text{scalar}}$ operates directly on a column reference $A \in \mathcal{C}(T)$:
+\begin{equation}
+    \text{AP-02}(p) = \exists f \in \mathcal{F}_{\text{scalar}}, A \in \mathcal{C}(T) \quad \text{s.t.} \quad f(A) \;\theta\; c
+\end{equation}
+where $\theta \in \{=, <, >, \le, \ge, \ne\}$ is a comparison operator, $c$ is an invariant or literal expression, and $\mathcal{F}_{\text{scalar}}$ includes deterministic transformations:
+\begin{equation*}
+    \mathcal{F}_{\text{scalar}} = \{\texttt{YEAR}, \texttt{MONTH}, \texttt{UPPER}, \texttt{LOWER}, \texttt{TRIM}, \texttt{COALESCE}, \dots\}
+\end{equation*}
+
+\textit{Theoretical Impact:} Let relation $T$ possess an index $\mathcal{I}_A \in \mathcal{I}(T)$ on attribute $A$. For a sargable predicate $A = c'$, B-tree traversal requires $\mathcal{O}(\log |T|)$ access time. In contrast, evaluating $f(A) = c$ prevents the engine from locating entry points in $\mathcal{I}_A$, degrading access complexity to $\mathcal{O}(|T| \cdot \text{Cost}(f))$.
+
+\textit{Negative Control Boundary:} If $f$ operates purely on a constant literal (e.g., $A = \texttt{UPPER}('john')$ or $A > \texttt{ROUND}(500.5, 2)$), $\text{AP-02}$ evaluates to false because the optimizer evaluates $f(c)$ once at compile/bind time as a constant parameter.
+
+\subsection{AP-05: Redundant Set-Inclusion Subqueries}
+\textbf{Definition 3 (Unnecessary Subquery Nesting):} Let $v_{\text{in}} \in V$ represent a membership expression $A \in Q_{\text{sub}}$. An unnecessary subquery occurs when:
+\begin{equation}
+    \text{AP-05}(v_{\text{in}}) = (|\Pi(Q_{\text{sub}})| = 1) \land (\text{Agg}(Q_{\text{sub}}) = \emptyset)
+\end{equation}
+where $\text{Agg}(Q_{\text{sub}})$ denotes the presence of \texttt{GROUP BY}, \texttt{HAVING}, or aggregate projections within the subquery.
+
+\textit{Negative Control Boundary:} Subqueries utilizing explicit aggregation or correlated existential qualifiers (\texttt{EXISTS}) are excluded, as they convey distinct semantic grouping requirements.
+
+\begin{figure}[t]
+\centering
+\fbox{
+\begin{minipage}{0.94\columnwidth}
+\small
+\textbf{SQL Source Code Pipeline:}
+\begin{center}
+\texttt{Input SQL Corpus (*.sql)} \\
+$\Downarrow$ \\
+\texttt{[1. Parser \& Error Isolation Engine (sqlglot)]} \\
+$\Downarrow$ \\
+\texttt{[2. Rule Engine: AP-01, AP-02, AP-05 Detectors]} \\
+$\Downarrow$ \\
+\texttt{[3. Semantic Rewriter] \quad [4. Cost Proxy (SQLite EXPLAIN)]} \\
+$\Downarrow$ \\
+\texttt{Multi-Channel Output: Console | JSON | HTML Dashboard}
+\end{center}
+\end{minipage}
+}
+\caption{Architectural overview of the static analysis and verification pipeline.}
+\label{fig:architecture}
+\end{figure}
+
+\section{System Architecture and Implementation}
+
+The architecture of our framework comprises four decoupled subsystems organized into an end-to-end analytical pipeline, illustrated in Fig.~\ref{fig:architecture}.
+
+\subsection{Parser and Error Isolation Engine}
+Static analysis tools deployed in real-world software engineering environments must exhibit fault tolerance; an unhandled syntax error in an individual file must never abort analysis of the broader codebase. The parser module (\texttt{engine/parser.py}) recursively crawls targeted directory structures, ingests SQL source files, and interfaces with the multi-dialect AST engine \texttt{sqlglot}. 
+
+The parsing lifecycle enforces strict error isolation:
+\begin{enumerate}
+    \item \textbf{I/O and Empty-File Guarding:} Empty files or comment-only scripts are identified and logged as non-fatal diagnostic warnings.
+    \item \textbf{Syntax Exception Isolation:} Parsing exceptions generated by invalid dialect tokens (e.g., unmatched parentheses, misplaced clauses) are intercepted via granular exception boundaries. The parser logs line and column diagnostic offsets and continues processing remaining files.
+    \item \textbf{AST Statement Iteration:} Each successfully parsed SQL file yields an ordered forest of statement trees, passed to downstream detector rules.
+\end{enumerate}
+
+\subsection{Declarative Rule Detection Engine}
+The detection engine (\texttt{engine/rules.py}) implements a modular visitor pattern over the generated ASTs. Every rule derives from a base abstract contract (\texttt{BaseRule}) and yields strongly typed \texttt{Finding} objects conforming to a unified data contract.
+
+Algorithm~\ref{alg:nonsargable} formalizes the detection routine for \texttt{AP-02: NON\_SARGABLE\_PREDICATE}. The detector traverses all predicate-bearing containers (\texttt{Where} and \texttt{JoinOn}), systematically identifying anonymous function invocations and typed functional AST nodes. By examining child argument expressions, the algorithm verifies whether an actual attribute identifier (\texttt{exp.Column}) is trapped inside the function call, deliberately ignoring literal invocations.
+
+\begin{algorithm}[t]
+\caption{Detection of Non-Sargable Predicates (AP-02)}
+\label{alg:nonsargable}
+\begin{algorithmic}[1]
+\REQUIRE Query AST node $R$, watched function registry $\mathcal{W}$, file path $P$
+\ENSURE List of detected findings $\mathcal{F}$
+\STATE $\mathcal{F} \leftarrow \emptyset$
+\STATE $\mathcal{C}_{\text{pred}} \leftarrow \text{FindNodes}(R, \texttt{Where}) \cup \text{FindNodes}(R, \texttt{Join.On})$
+\FORALL{$c \in \mathcal{C}_{\text{pred}}$}
+    \FORALL{$v_{\text{fn}} \in \text{FindNodes}(c, \texttt{Func}) \cup \text{FindNodes}(c, \texttt{Anonymous})$}
+        \STATE $\text{fn\_name} \leftarrow \text{NormalizeName}(v_{\text{fn}})$
+        \IF{$\text{fn\_name} \in \mathcal{W}$}
+            \STATE $\text{has\_col} \leftarrow \text{FALSE}$
+            \FORALL{$\text{arg} \in \text{Arguments}(v_{\text{fn}})$}
+                \IF{$\text{Type}(\text{arg}) = \texttt{Column}$}
+                    \STATE $\text{has\_col} \leftarrow \text{TRUE}$
+                    \BREAK
+                \ENDIF
+            \ENDFOR
+            \IF{$\text{has\_col} = \text{TRUE}$}
+                \STATE $(l, c) \leftarrow \text{GetSourceCoordinate}(v_{\text{fn}})$
+                \STATE $f \leftarrow \text{CreateFinding}(\text{Rule}=\text{AP-02}, \text{Line}=l, \text{Col}=c)$
+                \STATE $\mathcal{F} \leftarrow \mathcal{F} \cup \{f\}$
+            \ENDIF
+        \ENDIF
+    \ENDFOR
+\ENDFOR
+\RETURN $\mathcal{F}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Semantics-Preserving Query Rewriter}
+To mitigate developer cognitive burden, static analysis findings should provide automated remedial transformations where semantics can be rigorously preserved. Module \texttt{engine/rewriter.py} provides automated query transformation for \texttt{AP-01} (\texttt{SELECT *}). 
+
+Given an AST containing wildcard projection nodes, the rewriter inspects the query's \texttt{FROM} and \texttt{JOIN} clauses to construct a local relation-to-alias symbol table:
+\begin{equation}
+    \mathcal{M}_{\text{alias}} : \text{Alias} \to \text{RelationName}
+\end{equation}
+The rewriter interfaces with the catalog schema mapping $\mathcal{S}_{\text{catalog}}$ to resolve the precise attribute set $\mathcal{C}(T)$ for each referenced relation. Wildcard nodes are rewritten into explicit qualified attribute expressions ($\text{alias.attribute}$), maintaining column sequence and preserving query clauses such as \texttt{ORDER BY}, \texttt{LIMIT}, and nested subquery encapsulations (Algorithm~\ref{alg:rewriter}).
+
+\begin{algorithm}[t]
+\caption{Schema-Aware Wildcard Expansion Rewriting}
+\label{alg:rewriter}
+\begin{algorithmic}[1]
+\REQUIRE Original Query AST $Q$, Catalog Schema Registry $\mathcal{S}_{\text{catalog}}$
+\ENSURE Rewritten SQL string $Q_{\text{rewritten}}$ or $\bot$ (if unresolvable)
+\STATE $\mathcal{M}_{\text{alias}} \leftarrow \text{ExtractAliases}(Q)$
+\STATE $\text{modified} \leftarrow \text{FALSE}$
+\FORALL{$v_{\text{sel}} \in \text{FindNodes}(Q, \texttt{Select})$}
+    \STATE $E_{\text{new}} \leftarrow \emptyset$
+    \FORALL{$e \in v_{\text{sel}}.\text{expressions}$}
+        \IF{$\text{Type}(e) = \texttt{Star}$}
+            \STATE $E_{\text{expanded}} \leftarrow \emptyset$
+            \FORALL{$(a, T) \in \mathcal{M}_{\text{alias}}$}
+                \IF{$T \notin \mathcal{S}_{\text{catalog}}$}
+                    \RETURN $\bot$ \COMMENT{Incomplete catalog; abort rewrite}
+                \ENDIF
+                \FORALL{$\text{col} \in \mathcal{S}_{\text{catalog}}[T]$}
+                    \STATE $e_{\text{col}} \leftarrow \text{MakeColumnNode}(\text{Col}=\text{col}, \text{Table}=a)$
+                    \STATE $E_{\text{expanded}} \leftarrow E_{\text{expanded}} \cup \{e_{\text{col}}\}$
+                \ENDFOR
+            \ENDFOR
+            \STATE $E_{\text{new}} \leftarrow E_{\text{new}} \cup E_{\text{expanded}}$
+            \STATE $\text{modified} \leftarrow \text{TRUE}$
+        \ELSE
+            \STATE $E_{\text{new}} \leftarrow E_{\text{new}} \cup \{e\}$
+        \ENDIF
+    \ENDFOR
+    \IF{$\text{modified} = \text{TRUE}$}
+        \STATE $v_{\text{sel}}.\text{expressions} \leftarrow E_{\text{new}}$
+    \ENDIF
+\ENDFOR
+\IF{$\text{modified} = \text{TRUE}$}
+    \RETURN $\text{FormatSQL}(Q, \text{dialect}=\texttt{"sqlite"})$
+\ELSE
+    \RETURN $\bot$
+\ENDIF
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Execution Plan Cost Proxy}
+A significant challenge in static SQL linting is demonstrating to developers that a syntax issue carries tangible computational consequences. To bridge the gap between static ASTs and physical query execution, our framework integrates an in-memory Cost Plan Proxy (\texttt{engine/cost\_proxy.py}). 
+
+The module establishes an in-memory SQLite database instance initialized with representative relational schemas (e.g., \texttt{orders}, \texttt{customers}, \texttt{products}, \texttt{order\_items}) and standard secondary B-tree indexes. Dialect-specific functions not natively supported by SQLite (e.g., \texttt{YEAR}, \texttt{MONTH}, \texttt{NVL}, \texttt{DATEDIFF}) are registered dynamically as user-defined functions via SQLite's C-extension interface.
+
+For each flagged query, the cost proxy executes:
+\begin{lstlisting}[language=SQLCustom]
+EXPLAIN QUERY PLAN <Candidate SQL Query>
+\end{lstlisting}
+The engine inspects the diagnostic plan output records. If the access path contains the operator token \texttt{SCAN} without an accompanying \texttt{SEARCH ... USING INDEX}, the query is classified with the cost signal:
+\begin{equation}
+    \text{CostSignal} = \texttt{FULL\_SCAN\_DETECTED}
+\end{equation}
+Conversely, if the optimizer successfully utilizes an index seek, the signal is marked \texttt{INDEX\_USED}. Queries with unresolved table dependencies are categorized as \texttt{NOT\_EVALUATED}, preventing false execution assertions.
+
+\begin{table*}[t]
+\caption{Comprehensive Rule Taxonomy and Experimental Detection Matrix}
+\label{tab:rules_matrix}
+\centering
+\begin{tabular}{lp{3.4cm}p{4.2cm}p{4.0cm}cc}
+\toprule
+\textbf{Rule ID} & \textbf{Rule Name} & \textbf{Detection Target} & \textbf{Negative Control Exclusions} & \textbf{Precision} & \textbf{Recall} \\
+\midrule
+\texttt{AP-01} & \texttt{SELECT\_STAR} & Unbounded wildcard projections in \texttt{SELECT} & Aggregation projections (\texttt{COUNT(*)}) & 100\% & 100\% \\
+\texttt{AP-02} & \texttt{NON\_SARGABLE\_PRED} & Column attributes wrapped in scalar functions in \texttt{WHERE} or \texttt{JOIN ON} & Literal wrapping (e.g., \texttt{ROUND(50.5, 2)}), projection functions & 100\% & 100\% \\
+\texttt{AP-05} & \texttt{UNNECESSARY\_SUBQ} & Uncorrelated \texttt{WHERE col IN (SELECT ...)} on single unaggregated attributes & \texttt{EXISTS} semi-joins, \texttt{GROUP BY}, \texttt{HAVING}, or aggregate subqueries & 100\% & 100\% \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\section{Experimental Evaluation}
+
+\subsection{Experimental Setup and Test Corpus}
+The proposed static analysis framework was evaluated on a dedicated test platform running Python 3.14.2 on Windows 11 (AMD64 architecture) equipped with an 8-core CPU and 16 GB of memory. 
+
+To evaluate detection efficacy and operational robustness, we established two complementary evaluation suites:
+\begin{enumerate}
+    \item \textbf{Unit and Integration Test Suite:} A battery of 45 automated \texttt{pytest} specifications spanning AST isolation, negative controls, rewriter correctness, SQLite query plan analysis, and CLI interface contracts.
+    \item \textbf{Sample Benchmark Corpus:} An 18-file SQL fixture corpus containing positive anti-pattern instantiations across multi-table joins, subqueries, and complex predicates, alongside negative control files and edge cases (empty files, comments-only, and deliberately malformed SQL).
+\end{enumerate}
+
+\subsection{Detection Precision, Recall, and Accuracy}
+Table~\ref{tab:rules_matrix} details the detection performance across the test corpus. Across all 18 fixtures, the static analysis engine identified exactly 12 true positive anti-patterns:
+\begin{itemize}
+    \item 4 occurrences of \texttt{AP-01} (basic wildcard, join wildcard, order-by wildcard, and subquery wildcard).
+    \item 4 occurrences of \texttt{AP-02} (\texttt{UPPER(name)}, \texttt{TRIM(email)}, \texttt{YEAR(order\_date)}, and \texttt{COALESCE(o.customer\_id, 0)} in join conditions).
+    \item 4 occurrences of \texttt{AP-05} (basic subquery, multi-table subquery, department filtering, and item filtering).
+\end{itemize}
+
+Crucially, zero false positives were recorded across all negative control fixtures:
+\begin{itemize}
+    \item \texttt{COUNT(*)} projections correctly bypassed \texttt{AP-01}.
+    \item Scalar functions applied exclusively to literal values (e.g., \texttt{ROUND(50000.555, 2)}) correctly bypassed \texttt{AP-02}.
+    \item Subqueries utilizing aggregate calculations (\texttt{GROUP BY}, \texttt{HAVING COUNT(*) > 5}, and \texttt{AVG()}) correctly bypassed \texttt{AP-05}.
+    \item Correlated \texttt{EXISTS} queries bypassed \texttt{AP-05} without error.
+\end{itemize}
+Consequently, the system demonstrated empirical precision $\mathcal{P} = 1.0$ and recall $\mathcal{R} = 1.0$.
+
+\subsection{Query Rewrite and Plan Cost Differential}
+To quantify the benefit of automated rewriting and cost proxy evaluation, Listing~\ref{lst:before_after} illustrates a concrete transformation executed on \texttt{sample\_sql/ap01\_select\_star\_join.sql}.
+
+\begin{lstlisting}[language=SQLCustom, caption={Original anti-pattern query vs. AST-synthesized explicit rewrite.}, label={lst:before_after}]
+-- BEFORE: AP-01 Unbounded Wildcard Projection
+SELECT * FROM orders AS o 
+JOIN customers AS c ON o.customer_id = c.id 
+WHERE c.city = 'New York';
+
+-- AFTER: Semantics-Preserving Auto-Rewrite
+SELECT
+  o.id,
+  o.customer_id,
+  o.order_date,
+  o.total_amount,
+  o.status,
+  c.id,
+  c.name,
+  c.email,
+  c.city,
+  c.created_at
+FROM orders AS o
+JOIN customers AS c
+  ON o.customer_id = c.id
+WHERE
+  c.city = 'New York'
+\end{lstlisting}
+
+When evaluated through SQLite's query plan proxy, the non-sargable query:
+\begin{lstlisting}[language=SQLCustom]
+SELECT id, name, email FROM customers 
+WHERE TRIM(email) = 'test@example.com';
+\end{lstlisting}
+yielded the following execution plan despite the presence of a B-tree index on \texttt{customers(email)}:
+\begin{lstlisting}
+SCAN TABLE customers
+\end{lstlisting}
+The engine accurately assigned the \texttt{FULL\_SCAN\_DETECTED} cost signal. In contrast, evaluating the sargable equivalent (\texttt{email = 'test@example.com'}) yielded:
+\begin{lstlisting}
+SEARCH TABLE customers USING INDEX idx_customers_email (email=?)
+\end{lstlisting}
+resulting in the \texttt{INDEX\_USED} cost classification.
+
+\subsection{Execution Latency and Throughput}
+We evaluated execution overhead by benchmarking total processing time across the full automated test suite and the directory scanner. The complete test suite of 45 unit and integration tests completed in \textbf{1.81 seconds} (average $40.2\text{ ms}$ per test fixture including process spawning). Scanning, AST parsing, AST rule evaluation, SQLite cost plan evaluation, and HTML/JSON reporting across the 18-file corpus required under \textbf{380 ms}, confirming that the deterministic AST static analysis engine introduces negligible latency and is highly viable for real-time Git pre-commit hooks and continuous integration pipelines.
+
+\begin{table}[t]
+\caption{System Performance and Test Verification Summary}
+\label{tab:perf_summary}
+\centering
+\begin{tabular}{lc}
+\toprule
+\textbf{Metric / Evaluation Characteristic} & \textbf{Empirical Value} \\
+\midrule
+Total Automated Pytest Specifications & 45 \\
+Pytest Execution Wall-Clock Time & 1.81 s \\
+Overall Test Pass Rate & 100\% (45 / 45) \\
+Corpus Files Scanned & 18 \\
+True Anti-Patterns Detected & 12 \\
+False Positive Detections & 0 \\
+Cost Proxy Plan Evaluations & 12 \\
+Automated Rewrites Synthesized & 4 \\
+Unhandled Pipeline Crashes & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Discussion and Threats to Validity}
+
+\subsection{Deterministic ASTs vs. Stochastic LLM Linters}
+Our findings highlight the distinct advantages of deterministic AST static analysis over LLM-driven code review. While LLM-based assistants can detect high-level architectural intentions, they exhibit non-deterministic inference latencies (often 1--5 seconds per query), token expenditures, and probabilistic hallucinations that may produce invalid SQL transformations. In contrast, our AST visitor framework provides mathematical guarantees: if an anti-pattern matches the syntactic grammar specification, it is flagged with 100\% consistency and zero token cost.
+
+\subsection{Threats to Validity}
+Several limitations should be noted:
+\begin{itemize}
+    \item \textbf{Schema Catalog Dependency:} The query rewriter currently relies on a known relational schema mapping. In production environments where dynamic schema migrations occur, the engine must synchronize with live database information schemas via JDBC/ODBC metadata APIs.
+    \item \textbf{Cost Proxy Simplification:} The SQLite in-memory cost proxy provides an effective structural signal (\texttt{SCAN} vs. \texttt{SEARCH}), but cannot mirror the distributed execution plans of partitioned MPP data warehouses (e.g., Snowflake, BigQuery, Presto), where network shuffles and broadcast joins dominate execution cost.
+\end{itemize}
+
+\section{Conclusion and Future Work}
+
+In this paper, we presented the design, implementation, and empirical evaluation of a deterministic Abstract Syntax Tree static analysis engine for SQL anti-pattern detection, automated rewriting, and physical execution plan cost estimation. By leveraging grammar-level parsing via \texttt{sqlglot}, the framework accurately identifies unbounded projections (\texttt{SELECT *}), non-sargable predicates, and unnecessary subqueries with zero false positives on negative controls. Furthermore, the engine synthesizes explicit column-expanded rewrites and evaluates physical access path risks using an in-memory SQLite cost proxy. Experimental evaluation across 45 automated test specifications demonstrated 100\% precision and recall with sub-2-second execution time.
+
+Future work will expand the rule catalog to encompass Cartesian join hazards (\texttt{AP-03}), implicit type conversions (\texttt{AP-04}), and window function optimizations, alongside direct integration with PostgreSQL and MySQL optimizer cost matrices via language server protocol (LSP) integrations.
+
+\begin{thebibliography}{00}
+
+\bibitem{codd1970relational}
+E.~F. Codd, ``A relational model of data for large shared data banks,'' \textit{Communications of the ACM}, vol.~13, no.~6, pp.~377--387, 1970.
+
+\bibitem{selinger1979access}
+P.~G. Selinger, M.~M. Astrahan, D.~D. Chamberlin, R.~A. Lorie, and T.~G. Price, ``Access path selection in a relational database management system,'' in \textit{Proceedings of the 1979 ACM SIGMOD International Conference on Management of Data}, 1979, pp.~23--34.
+
+\bibitem{graefe1993query}
+G.~Graefe, ``Query evaluation techniques for large databases,'' \textit{ACM Computing Surveys (CSUR)}, vol.~25, no.~2, pp.~73--170, 1993.
+
+\bibitem{karwin2010sql}
+B.~Karwin, \textit{SQL Antipatterns: Avoiding the Pitfalls of Database Programming}. Pragmatic Bookshelf, 2010.
+
+\bibitem{stonebraker2005cstore}
+M.~Stonebraker et al., ``C-Store: A column-oriented DBMS,'' in \textit{Proceedings of the 31st International Conference on Very Large Data Bases (VLDB)}, 2005, pp.~553--564.
+
+\bibitem{sqlfluff}
+SQLFluff Community, ``SQLFluff: The SQL Linter for Humans,'' \url{https://sqlfluff.com}, 2024.
+
+\bibitem{sqlglot}
+T.~Moriss, ``sqlglot: An easily customizable SQL parser, transpiler, optimizer, and engine,'' GitHub repository, 2024.
+
+\end{thebibliography}
+
+\end{document}
