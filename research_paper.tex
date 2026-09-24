@@ -44,15 +44,31 @@
 \IEEEauthorblockA{\textit{Computational Intelligence} \\
 \textit{SRM Institute of Science and Technology} \\
 aradhyarahulpandey@gmail.com}
-}
 \and
-\IEEEauthorblockN{Dr. Saravan P}
-\IEEEauthorblockA{
-\textit{Department of Software Engineering}\\
-\textit{SRM Institute of Science and Technology}\\
-
+\IEEEauthorblockN{Dr. Saravanan P}
+\IEEEauthorblockA{\textit{Computational Intelligence} \\
+\textit{SRM Institute of Science and Technology} \\
+saravanp7@srmist.edu.in}
+\and
+\IEEEauthorblockN{Kartik Gupta}
+\IEEEauthorblockA{\textit{Computational Intelligence} \\
+\textit{SRM Institute of Science and Technology} \\
+kg2834@srmist.edu.in}
+\and
+\IEEEauthorblockN{Vineet Sahoo}
+\IEEEauthorblockA{\textit{Computational Intelligence} \\
+\textit{SRM Institute of Science and Technology} \\
+vs1023@srmist.edu.in}
+\and
+\IEEEauthorblockN{Ayush Guarav}
+\IEEEauthorblockA{\textit{Computational Intelligence} \\
+\textit{SRM Institute of Science and Technology} \\
+ag5705@srmist.edu.in}\and
+\IEEEauthorblockN{Saumye Singh}
+\IEEEauthorblockA{\textit{Computational Intelligence} \\
+\textit{SRM Institute of Science and Technology} \\
+ss0641@srmist.edu.in}
 }
-
 \maketitle
 
 \begin{abstract}
@@ -189,11 +205,10 @@ Algorithm~\ref{alg:nonsargable} formalizes the detection routine for \texttt{AP-
         \IF{$\text{fn\_name} \in \mathcal{W}$}
             \STATE $\text{has\_col} \leftarrow \text{FALSE}$
             \FORALL{$\text{arg} \in \text{Arguments}(v_{\text{fn}})$}
-                \IF{$\text{Type}(\text{arg}) = \texttt{Column}$}
-                    \STATE $\text{has\_col} \leftarrow \text{TRUE}$
-                    \BREAK
-                \ENDIF
-            \ENDFOR
+    \IF{$\text{Type}(\text{arg}) = \texttt{Column}$}
+        \STATE $\text{has\_col} \leftarrow \text{TRUE}$; \textbf{break}
+    \ENDIF
+\ENDFOR
             \IF{$\text{has\_col} = \text{TRUE}$}
                 \STATE $(l, c) \leftarrow \text{GetSourceCoordinate}(v_{\text{fn}})$
                 \STATE $f \leftarrow \text{CreateFinding}(\text{Rule}=\text{AP-02}, \text{Line}=l, \text{Col}=c)$
