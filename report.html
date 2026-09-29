@@ -119,7 +119,7 @@
     <div class="header">
         <h1>&#x1F50D; SQL Anti-Pattern Detection Report</h1>
         <p class="summary">
-            Found <strong>12</strong> anti-pattern(s) across scanned SQL files
+            Found <strong>15</strong> anti-pattern(s) across scanned SQL files
         </p>
     </div>
     <table>
@@ -279,6 +279,54 @@ WHERE
         </tr>
         <tr>
             <td>9</td>
+            <td class="file">sample_sql\ap03_cartesian_join.sql</td>
+            <td>2</td>
+            <td><span class="badge" style="background:#e74c3c">AP-01</span>
+                <br><small>SELECT_STAR</small></td>
+            <td class="message">SELECT * used instead of explicit column list. This fetches unnecessary data and breaks when schema changes.</td>
+            <td><pre class="snippet">/* AP-03: Cartesian Join Hazard (missing ON clause) */ SELECT * FROM orders AS o, customers AS c</pre></td>
+            <td><pre class="rewrite">/* AP-03: Cartesian Join Hazard (missing ON clause) */
+SELECT
+  o.id,
+  o.customer_id,
+  o.order_date,
+  o.total_amount,
+  o.status,
+  c.id,
+  c.name,
+  c.email,
+  c.city,
+  c.created_at
+FROM orders AS o, customers AS c</pre></td>
+            <td><span class="cost-badge" style="background:#e74c3c">FULL_SCAN_DETECTED</span></td>
+            <td>95%</td>
+        </tr>
+        <tr>
+            <td>10</td>
+            <td class="file">sample_sql\ap03_cartesian_join.sql</td>
+            <td>4</td>
+            <td><span class="badge" style="background:#95a5a6">AP-03</span>
+                <br><small>CARTESIAN_JOIN</small></td>
+            <td class="message">Cartesian join hazard detected (missing ON/USING clause or explicit CROSS JOIN). This can cause exponential row explosion and severe performance degradation.</td>
+            <td><pre class="snippet">, customers AS c</pre></td>
+            <td><span class="na">—</span></td>
+            <td><span class="cost-badge" style="background:#e74c3c">FULL_SCAN_DETECTED</span></td>
+            <td>90%</td>
+        </tr>
+        <tr>
+            <td>11</td>
+            <td class="file">sample_sql\ap03_cartesian_join.sql</td>
+            <td>9</td>
+            <td><span class="badge" style="background:#95a5a6">AP-03</span>
+                <br><small>CARTESIAN_JOIN</small></td>
+            <td class="message">Cartesian join hazard detected (missing ON/USING clause or explicit CROSS JOIN). This can cause exponential row explosion and severe performance degradation.</td>
+            <td><pre class="snippet">CROSS JOIN table_b AS b</pre></td>
+            <td><span class="na">—</span></td>
+            <td><span class="cost-badge" style="background:#95a5a6">NOT_EVALUATED</span></td>
+            <td>90%</td>
+        </tr>
+        <tr>
+            <td>12</td>
             <td class="file">sample_sql\ap05_in_subquery_basic.sql</td>
             <td>4</td>
             <td><span class="badge" style="background:#9b59b6">AP-05</span>
@@ -290,7 +338,7 @@ WHERE
             <td>80%</td>
         </tr>
         <tr>
-            <td>10</td>
+            <td>13</td>
             <td class="file">sample_sql\ap05_in_subquery_complex.sql</td>
             <td>4</td>
             <td><span class="badge" style="background:#9b59b6">AP-05</span>
@@ -302,7 +350,7 @@ WHERE
             <td>80%</td>
         </tr>
         <tr>
-            <td>11</td>
+            <td>14</td>
             <td class="file">sample_sql\ap05_in_subquery_dept.sql</td>
             <td>4</td>
             <td><span class="badge" style="background:#9b59b6">AP-05</span>
@@ -314,7 +362,7 @@ WHERE
             <td>80%</td>
         </tr>
         <tr>
-            <td>12</td>
+            <td>15</td>
             <td class="file">sample_sql\ap05_in_subquery_filtered.sql</td>
             <td>4</td>
             <td><span class="badge" style="background:#9b59b6">AP-05</span>

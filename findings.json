@@ -10,7 +10,7 @@
     "confidence": 0.95,
     "rewrite_sql": "/* AP-01 Positive: Basic SELECT * from a single table */\nSELECT\n  id,\n  customer_id,\n  order_date,\n  total_amount,\n  status\nFROM orders\nWHERE\n  status = 'pending'",
     "cost_signal": "FULL_SCAN_DETECTED",
-    "finding_id": "811f6d43-7dd1-4b82-b18b-2f98a1b42be9"
+    "finding_id": "2d525d8b-1953-4171-b8b2-c584daa6171a"
   },
   {
     "rule_id": "AP-01",
@@ -23,7 +23,7 @@
     "confidence": 0.95,
     "rewrite_sql": "/* AP-01 Positive: SELECT * with JOIN */\nSELECT\n  o.id,\n  o.customer_id,\n  o.order_date,\n  o.total_amount,\n  o.status,\n  c.id,\n  c.name,\n  c.email,\n  c.city,\n  c.created_at\nFROM orders AS o\nJOIN customers AS c\n  ON o.customer_id = c.id\nWHERE\n  c.city = 'New York'",
     "cost_signal": "FULL_SCAN_DETECTED",
-    "finding_id": "4b297a95-314c-4dde-a2df-c586d9812278"
+    "finding_id": "00afc1e2-c666-4cd0-9380-19a68b9afe8a"
   },
   {
     "rule_id": "AP-01",
@@ -36,7 +36,7 @@
     "confidence": 0.95,
     "rewrite_sql": "/* AP-01 Positive: SELECT * with ORDER BY */\nSELECT\n  id,\n  name,\n  department,\n  salary,\n  hire_date\nFROM employees\nORDER BY\n  salary DESC\nLIMIT 10",
     "cost_signal": "FULL_SCAN_DETECTED",
-    "finding_id": "51fe226d-8eca-4ba9-ab2c-b17e3e1c24be"
+    "finding_id": "8bd2c77f-4eda-4690-bdad-f5c754aaec17"
   },
   {
     "rule_id": "AP-01",
@@ -49,7 +49,7 @@
     "confidence": 0.95,
     "rewrite_sql": "SELECT\n  id,\n  customer_id,\n  order_date,\n  total_amount,\n  status\nFROM orders\nWHERE\n  status = 'shipped'",
     "cost_signal": "FULL_SCAN_DETECTED",
-    "finding_id": "d3317ff4-906c-4548-9d25-df094f5e8b8a"
+    "finding_id": "e68127b3-b6fe-4ac3-81ea-a6012f4ffa3f"
   },
   {
     "rule_id": "AP-02",
@@ -62,7 +62,7 @@
     "confidence": 0.85,
     "rewrite_sql": null,
     "cost_signal": "FULL_SCAN_DETECTED",
-    "finding_id": "93a96cd3-9aa2-49b2-bdc6-d02a57084b6b"
+    "finding_id": "f54afc3d-c0c0-46a9-8fb5-d88e9c4be3fd"
   },
   {
     "rule_id": "AP-02",
@@ -75,7 +75,7 @@
     "confidence": 0.85,
     "rewrite_sql": null,
     "cost_signal": "FULL_SCAN_DETECTED",
-    "finding_id": "552b60b5-eaa1-49ea-a078-17f8bd3482ba"
+    "finding_id": "672918b1-2ba0-44a5-8169-0a070451714b"
   },
   {
     "rule_id": "AP-02",
@@ -88,7 +88,7 @@
     "confidence": 0.85,
     "rewrite_sql": null,
     "cost_signal": "FULL_SCAN_DETECTED",
-    "finding_id": "cbad87a9-e4ce-4afa-8db4-5e6eed854929"
+    "finding_id": "6756ccb0-677d-452a-b74c-90c40abbf23a"
   },
   {
     "rule_id": "AP-02",
@@ -101,7 +101,46 @@
     "confidence": 0.85,
     "rewrite_sql": null,
     "cost_signal": "FULL_SCAN_DETECTED",
-    "finding_id": "e46383f1-9136-466f-ae29-fbd2712cbb9e"
+    "finding_id": "c2e1163d-01e8-48f8-9094-a2573b5e0f66"
+  },
+  {
+    "rule_id": "AP-01",
+    "rule_name": "SELECT_STAR",
+    "file": "sample_sql\\ap03_cartesian_join.sql",
+    "line": 2,
+    "column": 8,
+    "snippet": "/* AP-03: Cartesian Join Hazard (missing ON clause) */ SELECT * FROM orders AS o, customers AS c",
+    "message": "SELECT * used instead of explicit column list. This fetches unnecessary data and breaks when schema changes.",
+    "confidence": 0.95,
+    "rewrite_sql": "/* AP-03: Cartesian Join Hazard (missing ON clause) */\nSELECT\n  o.id,\n  o.customer_id,\n  o.order_date,\n  o.total_amount,\n  o.status,\n  c.id,\n  c.name,\n  c.email,\n  c.city,\n  c.created_at\nFROM orders AS o, customers AS c",
+    "cost_signal": "FULL_SCAN_DETECTED",
+    "finding_id": "3d1049f3-5a93-4d33-9ffc-6eb902763f73"
+  },
+  {
+    "rule_id": "AP-03",
+    "rule_name": "CARTESIAN_JOIN",
+    "file": "sample_sql\\ap03_cartesian_join.sql",
+    "line": 4,
+    "column": 14,
+    "snippet": ", customers AS c",
+    "message": "Cartesian join hazard detected (missing ON/USING clause or explicit CROSS JOIN). This can cause exponential row explosion and severe performance degradation.",
+    "confidence": 0.9,
+    "rewrite_sql": null,
+    "cost_signal": "FULL_SCAN_DETECTED",
+    "finding_id": "93a8b574-f007-46b3-b26a-5b912d1a7dee"
+  },
+  {
+    "rule_id": "AP-03",
+    "rule_name": "CARTESIAN_JOIN",
+    "file": "sample_sql\\ap03_cartesian_join.sql",
+    "line": 9,
+    "column": 18,
+    "snippet": "CROSS JOIN table_b AS b",
+    "message": "Cartesian join hazard detected (missing ON/USING clause or explicit CROSS JOIN). This can cause exponential row explosion and severe performance degradation.",
+    "confidence": 0.9,
+    "rewrite_sql": null,
+    "cost_signal": "NOT_EVALUATED",
+    "finding_id": "2c1704d5-65fa-402a-9a31-ceabaedbc8cf"
   },
   {
     "rule_id": "AP-05",
@@ -114,7 +153,7 @@
     "confidence": 0.8,
     "rewrite_sql": null,
     "cost_signal": "FULL_SCAN_DETECTED",
-    "finding_id": "591bb2d8-1259-4ce2-95ed-8b9948db0b33"
+    "finding_id": "db6edb57-195c-4322-8016-b4c5acd42c71"
   },
   {
     "rule_id": "AP-05",
@@ -127,7 +166,7 @@
     "confidence": 0.8,
     "rewrite_sql": null,
     "cost_signal": "FULL_SCAN_DETECTED",
-    "finding_id": "031c708b-eeae-4409-b5be-ba86e9b13820"
+    "finding_id": "7694357f-8d8e-44cd-8240-3e3140e0221d"
   },
   {
     "rule_id": "AP-05",
@@ -140,7 +179,7 @@
     "confidence": 0.8,
     "rewrite_sql": null,
     "cost_signal": "FULL_SCAN_DETECTED",
-    "finding_id": "bf64a035-c1e8-4918-aec7-060632f4a694"
+    "finding_id": "9c05aa39-59ca-4bdb-b742-d11c022b8d27"
   },
   {
     "rule_id": "AP-05",
@@ -153,6 +192,6 @@
     "confidence": 0.8,
     "rewrite_sql": null,
     "cost_signal": "FULL_SCAN_DETECTED",
-    "finding_id": "3381d5c7-a100-4233-b205-4cdfc6cac46a"
+    "finding_id": "ea46103d-ce4e-422a-921b-e16cd7936619"
   }
 ]

@@ -10,6 +10,8 @@ This project is a **Deterministic Abstract Syntax Tree (AST) Static Code Analysi
 
 ### Architecture & Components
 
+![Deterministic SQL Analysis Engine Architecture](Deterministic%20SQL%20Analysis%20Engine%20Architecture.png)
+
 ```
                 ┌────────────────────────────────┐
                 │        SQL Files (*.sql)       │
@@ -45,6 +47,10 @@ This project is a **Deterministic Abstract Syntax Tree (AST) Static Code Analysi
   │    • report.html: Interactive visual HTML dashboard        │
   └────────────────────────────────────────────────────────────┘
 ```
+
+### Entity-Relationship (E-R) Schema
+
+![E-R Diagram](E-R%20Diagram.png)
 
 ### Key Modules
 

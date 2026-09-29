@@ -270,9 +270,49 @@ class UnnecessarySubqueryRule(BaseRule):
         return False
 
 
+class CartesianJoinRule(BaseRule):
+    """AP-03: Detects Cartesian Join hazards.
+    
+    Finds explicit CROSS JOINs or JOINs lacking ON/USING clauses.
+    """
+    rule_id = "AP-03"
+    rule_name = "CARTESIAN_JOIN"
+
+    def detect(self, ast: exp.Expression, file_path: str) -> List[Finding]:
+        findings = []
+        query_sql = ast.sql(dialect="sqlite")
+
+        for join in ast.find_all(exp.Join):
+            kind = (join.args.get("kind") or "").upper()
+            on_clause = join.args.get("on")
+            using_clause = join.args.get("using")
+            
+            if kind == "CROSS" or (not on_clause and not using_clause and kind != "NATURAL"):
+                snippet = join.sql(dialect="sqlite")
+                if len(snippet) > 200:
+                    snippet = snippet[:200] + "..."
+                    
+                line, col = _get_node_line_col(join)
+                findings.append(Finding(
+                    rule_id=self.rule_id,
+                    rule_name=self.rule_name,
+                    file=file_path,
+                    line=line,
+                    column=col,
+                    snippet=snippet,
+                    message="Cartesian join hazard detected (missing ON/USING clause or explicit CROSS JOIN). "
+                            "This can cause exponential row explosion and severe performance degradation.",
+                    confidence=0.90,
+                    query=query_sql,
+                ))
+
+        return findings
+
+
 # Registry of all rules — used by the parser to run all rules
 ALL_RULES: List[BaseRule] = [
     SelectStarRule(),
     NonSargablePredicateRule(),
     UnnecessarySubqueryRule(),
+    CartesianJoinRule(),
 ]
