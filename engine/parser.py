@@ -8,6 +8,7 @@ Handles errors gracefully per PRD v2 §10:
 
 import os
 import sys
+import logging
 from typing import List, Tuple
 import sqlglot
 from engine.models import Finding
@@ -38,12 +39,38 @@ def parse_sql_file(file_path: str) -> Tuple[List[Finding], List[str]]:
         warnings.append(f"Skipping empty file: {file_path}")
         return findings, warnings
 
-    # Parse with sqlglot
+    # Parse with sqlglot. Strict parsing keeps malformed files visible as warnings.
     try:
-        statements = sqlglot.parse(sql_content, error_level=sqlglot.ErrorLevel.WARN)
+        statements = sqlglot.parse(sql_content, error_level=sqlglot.ErrorLevel.RAISE)
     except Exception as e:
         warnings.append(f"Parse error in {file_path}: {e}")
-        return findings, warnings
+        statements = []
+
+        # RAISE rejects the entire input when one statement is malformed. Retry
+        # in warning mode, then strictly validate each recovered statement so
+        # valid statements in the same file are still analyzed.
+        sqlglot_logger = logging.getLogger("sqlglot")
+        was_disabled = sqlglot_logger.disabled
+        sqlglot_logger.disabled = True
+        try:
+            candidates = sqlglot.parse(sql_content, error_level=sqlglot.ErrorLevel.WARN)
+        except Exception:
+            candidates = []
+        finally:
+            sqlglot_logger.disabled = was_disabled
+
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            try:
+                statements.append(
+                    sqlglot.parse_one(
+                        candidate.sql(),
+                        error_level=sqlglot.ErrorLevel.RAISE,
+                    )
+                )
+            except Exception:
+                continue
 
     # Run all rules against each parsed statement
     for ast in statements:

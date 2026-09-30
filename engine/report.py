@@ -7,34 +7,34 @@ from typing import List
 from engine.models import Finding
 import html
 
+RULE_COLORS = {
+    "AP-01": "#e74c3c",  # red
+    "AP-02": "#f39c12",  # orange
+    "AP-03": "#95a5a6",
+    "AP-05": "#9b59b6",  # purple
+}
+
+COST_COLORS = {
+    "FULL_SCAN_DETECTED": "#e74c3c",
+    "INDEX_USED": "#27ae60",
+    "NOT_EVALUATED": "#95a5a6",
+}
+
 
 def generate_html_report(findings: List[Finding], output_path: str) -> None:
     """Render findings as a static HTML report with a styled table."""
 
-    rows_html = ""
+    rows: List[str] = []
     for i, f in enumerate(findings, 1):
-        # Color-code by rule
-        rule_colors = {
-            "AP-01": "#e74c3c",  # red
-            "AP-02": "#f39c12",  # orange
-            "AP-05": "#9b59b6",  # purple
-        }
-        badge_color = rule_colors.get(f.rule_id, "#95a5a6")
+        badge_color = RULE_COLORS.get(f.rule_id, "#95a5a6")
+        cost_color = COST_COLORS.get(f.cost_signal, "#95a5a6")
 
-        cost_colors = {
-            "FULL_SCAN_DETECTED": "#e74c3c",
-            "INDEX_USED": "#27ae60",
-            "NOT_EVALUATED": "#95a5a6",
-        }
-        cost_color = cost_colors.get(f.cost_signal, "#95a5a6")
-
-        rewrite_cell = ""
         if f.rewrite_sql:
             rewrite_cell = f'<pre class="rewrite">{html.escape(f.rewrite_sql)}</pre>'
         else:
             rewrite_cell = '<span class="na">—</span>'
 
-        rows_html += f"""
+        rows.append(f"""
         <tr>
             <td>{i}</td>
             <td class="file">{html.escape(f.file)}</td>
@@ -46,7 +46,9 @@ def generate_html_report(findings: List[Finding], output_path: str) -> None:
             <td>{rewrite_cell}</td>
             <td><span class="cost-badge" style="background:{cost_color}">{html.escape(f.cost_signal)}</span></td>
             <td>{f.confidence:.0%}</td>
-        </tr>"""
+        </tr>""")
+
+    rows_html = "".join(rows)
 
     report_html = f"""<!DOCTYPE html>
 <html lang="en">

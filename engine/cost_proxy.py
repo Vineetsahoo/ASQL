@@ -6,6 +6,7 @@ This is NOT real timing benchmarking — just a structural cost indicator.
 """
 
 import sqlite3
+from functools import lru_cache
 from typing import Optional
 
 
@@ -117,6 +118,7 @@ def _get_connection() -> sqlite3.Connection:
     return _connection
 
 
+@lru_cache(maxsize=2048)
 def evaluate_cost_signal(sql: str) -> str:
     """Run EXPLAIN QUERY PLAN on the given SQL and return a cost signal.
     
@@ -153,6 +155,7 @@ def evaluate_cost_signal(sql: str) -> str:
 def close():
     """Close the SQLite connection."""
     global _connection
+    evaluate_cost_signal.cache_clear()
     if _connection:
         _connection.close()
         _connection = None

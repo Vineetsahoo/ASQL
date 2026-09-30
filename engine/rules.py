@@ -7,7 +7,6 @@ Rules implemented (MVP scope per PRD v2 §4):
 """
 
 from typing import List, Tuple
-import sqlglot
 from sqlglot import expressions as exp
 from engine.models import Finding
 
@@ -122,8 +121,8 @@ class NonSargablePredicateRule(BaseRule):
     def detect(self, ast: exp.Expression, file_path: str) -> List[Finding]:
         findings = []
         query_sql = ast.sql(dialect="sqlite")
+        seen_locations = set()
 
-        # Find all WHERE clauses and JOIN ON conditions
         predicate_containers = []
         for where in ast.find_all(exp.Where):
             predicate_containers.append(where)
@@ -133,32 +132,41 @@ class NonSargablePredicateRule(BaseRule):
                 predicate_containers.append(on_clause)
 
         for container in predicate_containers:
-            # Find function calls within predicates
-            for func_node in container.find_all(exp.Anonymous):
-                func_name = func_node.name.lower() if hasattr(func_node, "name") else ""
-                if func_name in self.WATCHED_FUNCTIONS:
-                    if self._has_column_argument(func_node):
-                        self._add_finding(findings, func_node, file_path, func_name, query_sql)
-
-            # Also check typed expression functions like YEAR(), UPPER(), etc.
-            # sqlglot parses many standard functions as specific expression types
-            for func_node in container.find_all(exp.Func):
+            for func_node in container.walk():
+                if not isinstance(func_node, exp.Func):
+                    continue
                 if isinstance(func_node, (exp.Select, exp.Where)):
                     continue
-                func_name = type(func_node).__name__.lower()
-                # Map sqlglot class names to common SQL function names
-                sql_name = getattr(func_node, "sql_name", func_name)
-                if isinstance(sql_name, str):
-                    sql_name = sql_name.lower()
-                else:
-                    sql_name = func_name
 
-                if sql_name in self.WATCHED_FUNCTIONS or func_name in self.WATCHED_FUNCTIONS:
-                    if self._has_column_argument(func_node):
-                        display_name = sql_name if sql_name in self.WATCHED_FUNCTIONS else func_name
-                        self._add_finding(findings, func_node, file_path, display_name, query_sql)
+                func_name = self._function_name(func_node)
+                if func_name is None:
+                    continue
+
+                if func_name in self.WATCHED_FUNCTIONS and self._has_column_argument(func_node):
+                    self._add_finding(findings, func_node, file_path, func_name, query_sql, seen_locations)
 
         return findings
+
+    def _function_name(self, func_node: exp.Expression) -> str:
+        """Normalize sqlglot function names from anonymous and typed function subclasses."""
+        if isinstance(func_node, exp.Anonymous):
+            name = getattr(func_node, "name", None)
+            if isinstance(name, str) and name.strip():
+                return name.lower()
+            if hasattr(func_node, "this") and isinstance(func_node.this, exp.Identifier):
+                return func_node.this.name.lower()
+
+        name = getattr(func_node, "name", None)
+        if isinstance(name, str) and name.strip():
+            return name.lower()
+
+        sql_name = getattr(func_node, "sql_name", None)
+        if callable(sql_name):
+            sql_name = sql_name()
+        if isinstance(sql_name, str) and sql_name.strip():
+            return sql_name.lower()
+
+        return type(func_node).__name__.lower()
 
     def _has_column_argument(self, func_node: exp.Expression) -> bool:
         """Check if any direct argument of the function is a Column reference."""
@@ -169,14 +177,16 @@ class NonSargablePredicateRule(BaseRule):
         return False
 
     def _add_finding(self, findings: List[Finding], func_node: exp.Expression,
-                     file_path: str, func_name: str, query_sql: str = None):
+                     file_path: str, func_name: str, query_sql: str = None,
+                     seen_locations: set = None):
         snippet = func_node.sql(dialect="sqlite")
         line, col = _get_node_line_col(func_node)
 
-        # Avoid duplicate findings for same location
-        for existing in findings:
-            if existing.line == line and existing.column == col and existing.file == file_path:
+        if seen_locations is not None:
+            location = (line, col, file_path)
+            if location in seen_locations:
                 return
+            seen_locations.add(location)
 
         findings.append(Finding(
             rule_id=self.rule_id,

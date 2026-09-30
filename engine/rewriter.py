@@ -4,6 +4,7 @@ Uses a hardcoded schema map (no real DB introspection) per PRD v2 §3.
 Only AP-01 rewrite is implemented for the MVP.
 """
 
+from functools import lru_cache
 from typing import Optional, Dict, List
 import sqlglot
 from sqlglot import expressions as exp
@@ -22,10 +23,7 @@ SCHEMA_MAP: Dict[str, List[str]] = {
     "shipments": ["id", "order_id", "ship_date", "carrier", "tracking_no"],
 }
 
-# Alias map: common table aliases -> table names
-ALIAS_MAP: Dict[str, str] = {}  # Built dynamically from query
-
-
+@lru_cache(maxsize=1024)
 def rewrite_select_star(sql: str) -> Optional[str]:
     """Attempt to rewrite SELECT * to explicit column list.
     
@@ -49,7 +47,7 @@ def rewrite_select_star(sql: str) -> Optional[str]:
             continue
 
         # Build alias->table mapping from FROM and JOINs
-        table_aliases = _extract_table_aliases(ast)
+        table_aliases = _extract_table_aliases(select)
 
         # Determine which tables to expand
         new_expressions = []
@@ -92,6 +90,11 @@ def _extract_table_aliases(ast: exp.Expression) -> Dict[str, str]:
     """Extract alias->table_name mapping from FROM and JOIN clauses."""
     aliases = {}
     for table in ast.find_all(exp.Table):
+        parent = table.parent
+        while parent is not None and not isinstance(parent, exp.Select):
+            parent = parent.parent
+        if parent is not ast:
+            continue
         table_name = table.name
         alias = table.alias
         if alias:
