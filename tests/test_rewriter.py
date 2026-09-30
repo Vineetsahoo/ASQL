@@ -43,6 +43,14 @@ class TestRewriter:
         for col in SCHEMA_MAP["orders"]:
             assert col in rewritten
 
+    def test_nested_selects_keep_table_columns_scoped(self):
+        sql = "SELECT * FROM orders o JOIN customers c ON o.customer_id = c.id WHERE EXISTS (SELECT * FROM products p WHERE p.id = o.id);"
+        rewritten = rewrite_select_star(sql)
+        assert rewritten is not None
+        assert "o.total_amount" in rewritten
+        assert "c.email" in rewritten
+        assert "p.price" not in rewritten
+
     def test_no_star_returns_none(self):
         sql = "SELECT id, name FROM customers WHERE city = 'Boston';"
         rewritten = rewrite_select_star(sql)

@@ -39,7 +39,7 @@ class TestCLIIntegration:
                 data = json.load(f)
 
             assert isinstance(data, list)
-            assert len(data) == 12
+            assert len(data) == 15
 
             # Check PRD v2 §6 schema fields on every finding
             required_keys = {
@@ -61,7 +61,7 @@ class TestCLIIntegration:
 
             # Verify AP-01 rewrites are present
             ap01_findings = [f for f in data if f["rule_id"] == "AP-01"]
-            assert len(ap01_findings) == 4
+            assert len(ap01_findings) == 5
             for f in ap01_findings:
                 assert f["rewrite_sql"] is not None
                 assert "orders" in f["rewrite_sql"] or "employees" in f["rewrite_sql"]
@@ -71,7 +71,7 @@ class TestCLIIntegration:
             with open(html_out, "r", encoding="utf-8") as f:
                 html_text = f.read()
             assert "SQL Anti-Pattern Detection Report" in html_text
-            assert "12" in html_text
+            assert "15" in html_text
 
     def test_cli_invalid_directory(self):
         cmd = [
