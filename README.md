@@ -29,6 +29,7 @@ This project is a **Deterministic Abstract Syntax Tree (AST) Static Code Analysi
   │ 2. Rule Detection Engine (engine/rules.py)                 │
   │    • AP-01 (SELECT_STAR): Flags SELECT *                   │
   │    • AP-02 (NON_SARGABLE_PREDICATE): Flags wrapped columns │
+   │    • AP-03 (CARTESIAN_JOIN): Flags joins without ON/USING │
   │    • AP-05 (UNNECESSARY_SUBQUERY): Flags IN (SELECT ...)   │
   └─────────────────────────────┬──────────────────────────────┘
                                 │
@@ -58,12 +59,12 @@ This project is a **Deterministic Abstract Syntax Tree (AST) Static Code Analysi
 |---|---|---|
 | **Data Models** | `engine/models.py` | Defines `Finding` dataclass matching PRD v3 §4 schema. |
 | **Parser** | `engine/parser.py` | AST parsing, multi-file traversal, error isolation. |
-| **Rules Engine** | `engine/rules.py` | Detectors for **AP-01**, **AP-02**, and **AP-05**. |
+| **Rules Engine** | `engine/rules.py` | Detectors for **AP-01**, **AP-02**, **AP-03**, and **AP-05**. |
 | **Rewriter** | `engine/rewriter.py` | AST-based query rewriter (expands `SELECT *`). |
 | **Cost Proxy** | `engine/cost_proxy.py` | In-memory SQLite `EXPLAIN QUERY PLAN` runner. |
 | **Report Generator** | `engine/report.py` | Static HTML dashboard builder with modern dark UI. |
 | **CLI Runner** | `scan.py` | Command-line interface tying the pipeline together. |
-| **Test Suite** | `tests/` | 45 comprehensive unit & integration tests. |
+| **Test Suite** | `tests/` | 48 comprehensive unit & integration tests. |
 | **Sample Corpus** | `sample_sql/` | 18 SQL test fixtures (positive & negative controls). |
 
 ---
@@ -74,6 +75,7 @@ This project is a **Deterministic Abstract Syntax Tree (AST) Static Code Analysi
 |---|---|---|---|
 | **AP-01** | `SELECT_STAR` | Unbounded `SELECT *` in query projections | `COUNT(*)` and aggregate functions are ignored |
 | **AP-02** | `NON_SARGABLE_PREDICATE` | Function calls wrapping column references in `WHERE`/`ON` (e.g., `UPPER(name)`, `YEAR(order_date)`) | Functions wrapping literal values (e.g., `WHERE name = UPPER('john')`) are ignored |
+| **AP-03** | `CARTESIAN_JOIN` | Explicit `CROSS JOIN` and joins without `ON`/`USING` clauses | `NATURAL JOIN` and joins with an explicit join condition are ignored |
 | **AP-05** | `UNNECESSARY_SUBQUERY` | `WHERE col IN (SELECT ...)` on single-table, unaggregated queries | `EXISTS` subqueries and queries using `GROUP BY`/`HAVING`/aggregates are ignored |
 
 ---
@@ -93,9 +95,9 @@ Run the full unit and integration test suite:
 ```powershell
 python -m pytest -v
 ```
-**Expected result:** All **45 tests pass** (`45 passed in ~1.6s`). This verifies:
+**Expected result:** All **48 tests pass** (`48 passed in ~1.6s`). This verifies:
 - Error recovery on malformed/empty files.
-- Accurate detection for all 3 rules.
+- Accurate detection for all 4 rules.
 - Negative controls (no false positives on `COUNT(*)` or literal wraps).
 - Correct query rewriting for `SELECT *`.
 - SQLite cost plan proxy evaluation.
@@ -111,9 +113,10 @@ python scan.py sample_sql/ --out findings.json --html report.html
 **Expected console output:**
 1. File-by-file progress with finding counts.
 2. A non-fatal warning for `sample_sql\edge_malformed.sql` (demonstrating graceful error isolation).
-3. A formatted console table listing all 12 detected anti-patterns:
-   - 4 findings for **AP-01**
+3. A formatted console table listing all 15 detected anti-patterns:
+   - 5 findings for **AP-01**
    - 4 findings for **AP-02**
+   - 2 findings for **AP-03**
    - 4 findings for **AP-05**
 4. Generation notices for `findings.json` and `report.html`.
 

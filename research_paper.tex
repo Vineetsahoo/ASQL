@@ -74,7 +74,7 @@ ss0641@srmist.edu.in}
 \begin{abstract}
 Relational Database Management Systems (RDBMS) rely heavily on declarative query optimization engines to formulate cost-effective physical execution plans. However, cost-based optimizers frequently struggle when presented with high-level developer anti-patterns. Sub-optimal query formulations—such as unbounded wildcard projections (\texttt{SELECT *}), non-sargable (Search Argument Able) predicates wrapping indexed attributes in scalar functions, and unaggregated subquery nesting—impede index utilization, induce high-overhead full table scans, saturate memory bandwidth, and couple application layers tightly to underlying schema layouts. While Large Language Model (LLM) linters introduce non-deterministic hallucinations and high inference latency, traditional string-matching linters lack structural semantic awareness. 
 
-In this paper, we propose, design, and evaluate a deterministic static analysis framework that parses SQL queries into grammar-level Abstract Syntax Trees (ASTs), rigorously flags anti-patterns via syntax traversal algorithms, performs semantics-preserving automatic query rewrites, and evaluates physical plan costs using an in-memory execution plan proxy. We formally characterize three prevalent anti-pattern categories (\texttt{AP-01}: \texttt{SELECT\_STAR}, \texttt{AP-02}: \texttt{NON\_SARGABLE\_PREDICATE}, and \texttt{AP-05}: \texttt{UNNECESSARY\_SUBQUERY}) with strict negative controls to eliminate false positives. Evaluated across an automated test suite of 45 test fixtures and synthetic multi-table corpora, the proposed engine achieves 100\% precision and recall, isolates syntax errors gracefully, and demonstrates sub-millisecond per-query parsing overhead.
+In this paper, we propose, design, and evaluate a deterministic static analysis framework that parses SQL queries into grammar-level Abstract Syntax Trees (ASTs), rigorously flags anti-patterns via syntax traversal algorithms, performs semantics-preserving automatic query rewrites, and evaluates physical plan costs using an in-memory execution plan proxy. We formally characterize four prevalent anti-pattern categories (\texttt{AP-01}: \texttt{SELECT\_STAR}, \texttt{AP-02}: \texttt{NON\_SARGABLE\_PREDICATE}, \texttt{AP-03}: \texttt{CARTESIAN\_JOIN}, and \texttt{AP-05}: \texttt{UNNECESSARY\_SUBQUERY}) with strict negative controls to eliminate false positives. Evaluated across an automated test suite of 46 test fixtures and synthetic multi-table corpora, the proposed engine achieves 100\% precision and recall, isolates syntax errors gracefully, and demonstrates sub-millisecond per-query parsing overhead.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -99,10 +99,10 @@ To resolve these limitations, this paper presents the design, formalization, and
 \subsection{Contributions}
 The specific contributions of this work are as follows:
 \begin{itemize}
-    \item \textbf{Formal Anti-Pattern Taxonomy \& Detection Algorithms:} We define formal mathematical detection criteria and AST visitor algorithms for three critical SQL anti-patterns (\texttt{AP-01}, \texttt{AP-02}, and \texttt{AP-05}), explicitly establishing negative control boundaries that guarantee zero false positives on standard primitives such as \texttt{COUNT(*)} and literal evaluations.
+    \item \textbf{Formal Anti-Pattern Taxonomy \& Detection Algorithms:} We define formal mathematical detection criteria and AST visitor algorithms for four critical SQL anti-patterns (\texttt{AP-01}, \texttt{AP-02}, \texttt{AP-03}, and \texttt{AP-05}), explicitly establishing negative control boundaries that guarantee zero false positives on standard primitives such as \texttt{COUNT(*)} and literal evaluations.
     \item \textbf{Semantics-Preserving Query Rewriting Engine:} We implement an AST rewriting module that expands unbounded projection nodes into schema-verified explicit attribute lists while preserving query clauses including table aliases, \texttt{ORDER BY}, and \texttt{LIMIT}.
     \item \textbf{In-Memory Query Plan Cost Proxy:} We integrate an automated execution plan analysis layer using an indexed in-memory relational schema, dynamically detecting full table scan hazards (\texttt{FULL\_SCAN\_DETECTED} vs. \texttt{INDEX\_USED}) via \texttt{EXPLAIN QUERY PLAN}.
-    \item \textbf{Comprehensive Empirical Validation:} We construct an automated testing and benchmark suite comprising 45 unit/integration test specifications and 18 diverse SQL fixtures, demonstrating 100\% detection precision, robust syntax-error isolation, and sub-2-second execution over multi-file corpora.
+    \item \textbf{Comprehensive Empirical Validation:} We construct an automated testing and benchmark suite comprising 46 unit/integration test specifications and 18 diverse SQL fixtures, demonstrating 100\% detection precision, robust syntax-error isolation, and sub-2-second execution over multi-file corpora.
 \end{itemize}
 
 \section{Related Work}
@@ -307,7 +307,7 @@ The proposed static analysis framework was evaluated on a dedicated test platfor
 
 To evaluate detection efficacy and operational robustness, we established two complementary evaluation suites:
 \begin{enumerate}
-    \item \textbf{Unit and Integration Test Suite:} A battery of 45 automated \texttt{pytest} specifications spanning AST isolation, negative controls, rewriter correctness, SQLite query plan analysis, and CLI interface contracts.
+    \item \textbf{Unit and Integration Test Suite:} A battery of 46 automated \texttt{pytest} specifications spanning AST isolation, negative controls, rewriter correctness, SQLite query plan analysis, and CLI interface contracts.
     \item \textbf{Sample Benchmark Corpus:} An 18-file SQL fixture corpus containing positive anti-pattern instantiations across multi-table joins, subqueries, and complex predicates, alongside negative control files and edge cases (empty files, comments-only, and deliberately malformed SQL).
 \end{enumerate}
 
@@ -409,9 +409,9 @@ Several limitations should be noted:
 
 \section{Conclusion and Future Work}
 
-In this paper, we presented the design, implementation, and empirical evaluation of a deterministic Abstract Syntax Tree static analysis engine for SQL anti-pattern detection, automated rewriting, and physical execution plan cost estimation. By leveraging grammar-level parsing via \texttt{sqlglot}, the framework accurately identifies unbounded projections (\texttt{SELECT *}), non-sargable predicates, and unnecessary subqueries with zero false positives on negative controls. Furthermore, the engine synthesizes explicit column-expanded rewrites and evaluates physical access path risks using an in-memory SQLite cost proxy. Experimental evaluation across 45 automated test specifications demonstrated 100\% precision and recall with sub-2-second execution time.
+In this paper, we presented the design, implementation, and empirical evaluation of a deterministic Abstract Syntax Tree static analysis engine for SQL anti-pattern detection, automated rewriting, and physical execution plan cost estimation. By leveraging grammar-level parsing via \texttt{sqlglot}, the framework accurately identifies unbounded projections (\texttt{SELECT *}), non-sargable predicates, Cartesian joins, and unnecessary subqueries with zero false positives on negative controls. Furthermore, the engine synthesizes explicit column-expanded rewrites and evaluates physical access path risks using an in-memory SQLite cost proxy. Experimental evaluation across 46 automated test specifications demonstrated 100\% precision and recall with sub-2-second execution time.
 
-Future work will expand the rule catalog to encompass Cartesian join hazards (\texttt{AP-03}), implicit type conversions (\texttt{AP-04}), and window function optimizations, alongside direct integration with PostgreSQL and MySQL optimizer cost matrices via language server protocol (LSP) integrations.
+Future work will expand the rule catalog to encompass implicit type conversions (\texttt{AP-04}) and window function optimizations, alongside direct integration with PostgreSQL and MySQL optimizer cost matrices via language server protocol (LSP) integrations.
 
 \begin{thebibliography}{00}
 

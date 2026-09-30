@@ -4,13 +4,19 @@ __pycache__/
 *.so
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
+coverage.xml
 *.log
 .env
 .venv
 env/
 venv/
 
+# Generated SQL scan outputs
+findings.json
+report.html
+artifacts/
 
 ASQL-Research-Paper.pdf
 

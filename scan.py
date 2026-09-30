@@ -40,7 +40,8 @@ def enrich_findings(findings: List[Finding]) -> None:
         # Attempt SELECT * rewrite for AP-01 findings
         if f.rule_id == "AP-01" and f.rewrite_sql is None:
             try:
-                rewritten = rewrite_select_star(f.snippet)
+                sql_to_rewrite = f.query or f.snippet
+                rewritten = rewrite_select_star(sql_to_rewrite)
                 if rewritten:
                     f.rewrite_sql = rewritten
             except Exception:
@@ -50,7 +51,7 @@ def enrich_findings(findings: List[Finding]) -> None:
         if f.cost_signal == "NOT_EVALUATED":
             try:
                 # Prefer full query if available, falling back to snippet
-                sql_to_check = getattr(f, "query", None) or f.snippet
+                sql_to_check = f.query or f.snippet
                 # Remove trailing ... if snippet was truncated
                 if sql_to_check.endswith("..."):
                     f.cost_signal = "NOT_EVALUATED"
