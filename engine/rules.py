@@ -171,9 +171,8 @@ class NonSargablePredicateRule(BaseRule):
     def _has_column_argument(self, func_node: exp.Expression) -> bool:
         """Check if any direct argument of the function is a Column reference."""
         for arg in func_node.iter_expressions():
-            if isinstance(arg, exp.Column):
+            if any(isinstance(node, exp.Column) for node in arg.walk()):
                 return True
-            # Also check if there's a column nested one level (e.g., inside a Cast)
         return False
 
     def _add_finding(self, findings: List[Finding], func_node: exp.Expression,
@@ -294,10 +293,11 @@ class CartesianJoinRule(BaseRule):
 
         for join in ast.find_all(exp.Join):
             kind = (join.args.get("kind") or "").upper()
+            method = (join.args.get("method") or "").upper()
             on_clause = join.args.get("on")
             using_clause = join.args.get("using")
             
-            if kind == "CROSS" or (not on_clause and not using_clause and kind != "NATURAL"):
+            if kind == "CROSS" or (not on_clause and not using_clause and method != "NATURAL"):
                 snippet = join.sql(dialect="sqlite")
                 if len(snippet) > 200:
                     snippet = snippet[:200] + "..."

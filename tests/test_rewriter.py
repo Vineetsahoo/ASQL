@@ -70,3 +70,22 @@ class TestRewriter:
         sql = "NOT A VALID SQL STATEMENT !!!"
         rewritten = rewrite_select_star(sql)
         assert rewritten is None
+
+    def test_table_star_expansion(self):
+        sql = "SELECT o.* FROM orders o;"
+        rewritten = rewrite_select_star(sql)
+        assert rewritten is not None
+        assert "o.id" in rewritten
+        assert "o.customer_id" in rewritten
+
+    def test_table_star_unknown_table(self):
+        sql = "SELECT u.* FROM unknown_table u;"
+        rewritten = rewrite_select_star(sql)
+        assert rewritten is None
+        
+    def test_table_star_mixed(self):
+        sql = "SELECT o.*, u.* FROM orders o CROSS JOIN unknown_table u;"
+        rewritten = rewrite_select_star(sql)
+        assert rewritten is not None
+        assert "o.id" in rewritten
+        assert "u.*" in rewritten

@@ -42,7 +42,7 @@ def rewrite_select_star(sql: str) -> Optional[str]:
     modified = False
 
     for select in ast.find_all(exp.Select):
-        stars = [e for e in select.expressions if isinstance(e, exp.Star)]
+        stars = [e for e in select.expressions if isinstance(e, exp.Star) or (isinstance(e, exp.Column) and isinstance(e.this, exp.Star))]
         if not stars:
             continue
 
