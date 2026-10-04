@@ -250,3 +250,53 @@ class TestCartesianJoinRule:
         ast = sqlglot.parse_one(sql)
         findings = rule.detect(ast, "test.sql")
         assert len(findings) == 0
+
+class TestLeadingWildcardRule:
+    @pytest.fixture
+    def rule(self):
+        from engine.rules import LeadingWildcardRule
+        return LeadingWildcardRule()
+
+    def test_leading_percent(self, rule):
+        sql = "SELECT * FROM users WHERE name LIKE '%john';"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 1
+        assert findings[0].rule_id == "AP-04"
+
+    def test_leading_underscore(self, rule):
+        sql = "SELECT * FROM users WHERE name LIKE '_john';"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 1
+
+    def test_trailing_wildcard_negative_control(self, rule):
+        sql = "SELECT * FROM users WHERE name LIKE 'john%';"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 0
+
+    def test_no_wildcard_negative_control(self, rule):
+        sql = "SELECT * FROM users WHERE name LIKE 'john';"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 0
+
+class TestUnionWithoutAllRule:
+    @pytest.fixture
+    def rule(self):
+        from engine.rules import UnionWithoutAllRule
+        return UnionWithoutAllRule()
+
+    def test_union_without_all(self, rule):
+        sql = "SELECT id FROM users UNION SELECT id FROM customers;"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 1
+        assert findings[0].rule_id == "AP-06"
+
+    def test_union_all_negative_control(self, rule):
+        sql = "SELECT id FROM users UNION ALL SELECT id FROM customers;"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 0

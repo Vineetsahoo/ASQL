@@ -11,7 +11,9 @@ RULE_COLORS = {
     "AP-01": "#e74c3c",  # red
     "AP-02": "#f39c12",  # orange
     "AP-03": "#95a5a6",
+    "AP-04": "#e67e22",  # dark orange
     "AP-05": "#9b59b6",  # purple
+    "AP-06": "#3498db",  # blue
 }
 
 COST_COLORS = {

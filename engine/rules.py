@@ -26,7 +26,7 @@ class BaseRule:
     rule_id: str = ""
     rule_name: str = ""
 
-    def detect(self, ast: exp.Expression, file_path: str) -> List[Finding]:
+    def detect(self, ast: exp.Expression, file_path: str, dialect: str = "sqlite") -> List[Finding]:
         raise NotImplementedError
 
 
@@ -38,9 +38,9 @@ class SelectStarRule(BaseRule):
     rule_id = "AP-01"
     rule_name = "SELECT_STAR"
 
-    def detect(self, ast: exp.Expression, file_path: str) -> List[Finding]:
+    def detect(self, ast: exp.Expression, file_path: str, dialect: str = "sqlite") -> List[Finding]:
         findings = []
-        query_sql = ast.sql(dialect="sqlite")
+        query_sql = ast.sql(dialect=dialect)
 
         for select in ast.find_all(exp.Select):
             for star_node in select.find_all(exp.Star):
@@ -75,7 +75,7 @@ class SelectStarRule(BaseRule):
                     continue
 
                 # Get the SQL snippet for context
-                snippet = select.sql(dialect="sqlite")
+                snippet = select.sql(dialect=dialect)
                 # Truncate very long snippets
                 if len(snippet) > 200:
                     snippet = snippet[:200] + "..."
@@ -118,9 +118,9 @@ class NonSargablePredicateRule(BaseRule):
         "datepart", "datediff", "dateadd", "extract",
     }
 
-    def detect(self, ast: exp.Expression, file_path: str) -> List[Finding]:
+    def detect(self, ast: exp.Expression, file_path: str, dialect: str = "sqlite") -> List[Finding]:
         findings = []
-        query_sql = ast.sql(dialect="sqlite")
+        query_sql = ast.sql(dialect=dialect)
         seen_locations = set()
 
         predicate_containers = []
@@ -143,7 +143,7 @@ class NonSargablePredicateRule(BaseRule):
                     continue
 
                 if func_name in self.WATCHED_FUNCTIONS and self._has_column_argument(func_node):
-                    self._add_finding(findings, func_node, file_path, func_name, query_sql, seen_locations)
+                    self._add_finding(findings, func_node, file_path, func_name, query_sql, seen_locations, dialect=dialect)
 
         return findings
 
@@ -177,8 +177,8 @@ class NonSargablePredicateRule(BaseRule):
 
     def _add_finding(self, findings: List[Finding], func_node: exp.Expression,
                      file_path: str, func_name: str, query_sql: str = None,
-                     seen_locations: set = None):
-        snippet = func_node.sql(dialect="sqlite")
+                     seen_locations: set = None, dialect: str = "sqlite"):
+        snippet = func_node.sql(dialect=dialect)
         line, col = _get_node_line_col(func_node)
 
         if seen_locations is not None:
@@ -214,9 +214,9 @@ class UnnecessarySubqueryRule(BaseRule):
     rule_id = "AP-05"
     rule_name = "UNNECESSARY_SUBQUERY"
 
-    def detect(self, ast: exp.Expression, file_path: str) -> List[Finding]:
+    def detect(self, ast: exp.Expression, file_path: str, dialect: str = "sqlite") -> List[Finding]:
         findings = []
-        query_sql = ast.sql(dialect="sqlite")
+        query_sql = ast.sql(dialect=dialect)
 
         for in_node in ast.find_all(exp.In):
             # Check if the right side is a subquery (Select inside a Subquery)
@@ -242,7 +242,7 @@ class UnnecessarySubqueryRule(BaseRule):
             if len(subquery_select.expressions) != 1:
                 continue
 
-            snippet = in_node.sql(dialect="sqlite")
+            snippet = in_node.sql(dialect=dialect)
             if len(snippet) > 200:
                 snippet = snippet[:200] + "..."
 
@@ -287,9 +287,9 @@ class CartesianJoinRule(BaseRule):
     rule_id = "AP-03"
     rule_name = "CARTESIAN_JOIN"
 
-    def detect(self, ast: exp.Expression, file_path: str) -> List[Finding]:
+    def detect(self, ast: exp.Expression, file_path: str, dialect: str = "sqlite") -> List[Finding]:
         findings = []
-        query_sql = ast.sql(dialect="sqlite")
+        query_sql = ast.sql(dialect=dialect)
 
         for join in ast.find_all(exp.Join):
             kind = (join.args.get("kind") or "").upper()
@@ -298,7 +298,7 @@ class CartesianJoinRule(BaseRule):
             using_clause = join.args.get("using")
             
             if kind == "CROSS" or (not on_clause and not using_clause and method != "NATURAL"):
-                snippet = join.sql(dialect="sqlite")
+                snippet = join.sql(dialect=dialect)
                 if len(snippet) > 200:
                     snippet = snippet[:200] + "..."
                     
@@ -319,10 +319,93 @@ class CartesianJoinRule(BaseRule):
         return findings
 
 
+class LeadingWildcardRule(BaseRule):
+    """AP-04: Detects LIKE/ILIKE patterns starting with a wildcard (% or _).
+    
+    Leading wildcards prevent the database from using an index for the search.
+    """
+    rule_id = "AP-04"
+    rule_name = "LEADING_WILDCARD"
+
+    def detect(self, ast: exp.Expression, file_path: str, dialect: str = "sqlite") -> List[Finding]:
+        findings = []
+        query_sql = ast.sql(dialect=dialect)
+
+        for like_node in ast.find_all(exp.Like, exp.ILike):
+            expression = like_node.args.get("expression")
+            if not isinstance(expression, exp.Literal):
+                continue
+            if not expression.args.get("is_string"):
+                continue
+
+            value = expression.this
+            if value.startswith("%") or value.startswith("_"):
+                snippet = like_node.sql(dialect=dialect)
+                if len(snippet) > 200:
+                    snippet = snippet[:200] + "..."
+
+                line, col = _get_node_line_col(like_node)
+
+                findings.append(Finding(
+                    rule_id=self.rule_id,
+                    rule_name=self.rule_name,
+                    file=file_path,
+                    line=line,
+                    column=col,
+                    snippet=snippet,
+                    message="Leading wildcard in LIKE/ILIKE predicate detected. "
+                            "This prevents index usage and forces a full table scan.",
+                    confidence=0.95,
+                    query=query_sql,
+                ))
+
+        return findings
+
+
+class UnionWithoutAllRule(BaseRule):
+    """AP-06: Detects UNION without ALL.
+    
+    UNION implicitly deduplicates rows (causing a sort), whereas UNION ALL just concatenates.
+    """
+    rule_id = "AP-06"
+    rule_name = "UNION_WITHOUT_ALL"
+
+    def detect(self, ast: exp.Expression, file_path: str, dialect: str = "sqlite") -> List[Finding]:
+        findings = []
+        query_sql = ast.sql(dialect=dialect)
+
+        for union in ast.find_all(exp.Union):
+            # distinct=True means it's a UNION, distinct=False means UNION ALL
+            is_distinct = union.args.get("distinct", False)
+            if is_distinct:
+                snippet = union.sql(dialect=dialect)
+                if len(snippet) > 200:
+                    snippet = snippet[:200] + "..."
+                
+                line, col = _get_node_line_col(union)
+                findings.append(Finding(
+                    rule_id=self.rule_id,
+                    rule_name=self.rule_name,
+                    file=file_path,
+                    line=line,
+                    column=col,
+                    snippet=snippet,
+                    message="UNION detected without ALL. "
+                            "This triggers an implicit sort and deduplication. "
+                            "Use UNION ALL if deduplication is not required.",
+                    confidence=0.90,
+                    query=query_sql,
+                ))
+
+        return findings
+
+
 # Registry of all rules — used by the parser to run all rules
 ALL_RULES: List[BaseRule] = [
     SelectStarRule(),
     NonSargablePredicateRule(),
     UnnecessarySubqueryRule(),
     CartesianJoinRule(),
+    LeadingWildcardRule(),
+    UnionWithoutAllRule(),
 ]

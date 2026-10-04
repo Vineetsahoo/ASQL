@@ -15,7 +15,7 @@ from engine.models import Finding
 from engine.rules import ALL_RULES
 
 
-def parse_sql_file(file_path: str) -> Tuple[List[Finding], List[str]]:
+def parse_sql_file(file_path: str, dialect: str = "sqlite") -> Tuple[List[Finding], List[str]]:
     """Parse a single SQL file and run all rules against it.
     
     Returns:
@@ -41,9 +41,9 @@ def parse_sql_file(file_path: str) -> Tuple[List[Finding], List[str]]:
 
     # Parse with sqlglot. Strict parsing keeps malformed files visible as warnings.
     try:
-        statements = sqlglot.parse(sql_content, error_level=sqlglot.ErrorLevel.RAISE)
+        statements = sqlglot.parse(sql_content, read=dialect, error_level=sqlglot.ErrorLevel.RAISE)
     except Exception as e:
-        warnings.append(f"Parse error in {file_path}: {e}")
+        warnings.append(f"Parse error in {file_path} (dialect={dialect}): {e}")
         statements = []
 
         # RAISE rejects the entire input when one statement is malformed. Retry
@@ -53,7 +53,7 @@ def parse_sql_file(file_path: str) -> Tuple[List[Finding], List[str]]:
         was_disabled = sqlglot_logger.disabled
         sqlglot_logger.disabled = True
         try:
-            candidates = sqlglot.parse(sql_content, error_level=sqlglot.ErrorLevel.WARN)
+            candidates = sqlglot.parse(sql_content, read=dialect, error_level=sqlglot.ErrorLevel.WARN)
         except Exception:
             candidates = []
         finally:
@@ -66,6 +66,7 @@ def parse_sql_file(file_path: str) -> Tuple[List[Finding], List[str]]:
                 statements.append(
                     sqlglot.parse_one(
                         candidate.sql(),
+                        read=dialect,
                         error_level=sqlglot.ErrorLevel.RAISE,
                     )
                 )
@@ -78,7 +79,7 @@ def parse_sql_file(file_path: str) -> Tuple[List[Finding], List[str]]:
             continue
         for rule in ALL_RULES:
             try:
-                rule_findings = rule.detect(ast, file_path)
+                rule_findings = rule.detect(ast, file_path, dialect=dialect)
                 findings.extend(rule_findings)
             except Exception as e:
                 warnings.append(
@@ -88,7 +89,7 @@ def parse_sql_file(file_path: str) -> Tuple[List[Finding], List[str]]:
     return findings, warnings
 
 
-def scan_directory(directory: str) -> Tuple[List[Finding], List[str]]:
+def scan_directory(directory: str, dialect: str = "sqlite") -> Tuple[List[Finding], List[str]]:
     """Scan all .sql files in a directory tree.
     
     Returns:
@@ -112,7 +113,7 @@ def scan_directory(directory: str) -> Tuple[List[Finding], List[str]]:
     for file_path in sql_files:
         # Use relative path for cleaner output
         rel_path = os.path.relpath(file_path, start=os.getcwd())
-        findings, warnings = parse_sql_file(file_path)
+        findings, warnings = parse_sql_file(file_path, dialect=dialect)
 
         # Update file paths to relative
         for f in findings:

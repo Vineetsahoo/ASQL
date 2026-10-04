@@ -120,6 +120,11 @@ def main():
         default="report.html",
         help="Output path for HTML report (default: report.html)",
     )
+    parser.add_argument(
+        "--dialect",
+        default="sqlite",
+        help="SQL dialect to use for parsing (e.g. postgres, bigquery, snowflake, sqlite). Default: sqlite",
+    )
 
     args = parser.parse_args()
 
@@ -128,10 +133,10 @@ def main():
         print(f"Error: '{args.directory}' is not a valid directory.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"\n🔍 Scanning SQL files in: {args.directory}\n", file=sys.stderr)
+    print(f"\n🔍 Scanning SQL files in: {args.directory} (dialect: {args.dialect})\n", file=sys.stderr)
 
     # Parse and detect
-    findings, warnings = scan_directory(args.directory)
+    findings, warnings = scan_directory(args.directory, dialect=args.dialect)
 
     # Print warnings
     if warnings:
