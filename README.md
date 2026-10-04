@@ -76,7 +76,9 @@ This project is a **Deterministic Abstract Syntax Tree (AST) Static Code Analysi
 | **AP-01** | `SELECT_STAR` | Unbounded `SELECT *` in query projections | `COUNT(*)` and aggregate functions are ignored |
 | **AP-02** | `NON_SARGABLE_PREDICATE` | Function calls wrapping column references in `WHERE`/`ON` (e.g., `UPPER(name)`, `YEAR(order_date)`) | Functions wrapping literal values (e.g., `WHERE name = UPPER('john')`) are ignored |
 | **AP-03** | `CARTESIAN_JOIN` | Explicit `CROSS JOIN` and joins without `ON`/`USING` clauses | `NATURAL JOIN` and joins with an explicit join condition are ignored |
+| **AP-04** | `LEADING_WILDCARD` | `LIKE`/`ILIKE` patterns that start with `%` (e.g., `WHERE name LIKE '%smith'`) | Patterns without a leading wildcard are ignored |
 | **AP-05** | `UNNECESSARY_SUBQUERY` | `WHERE col IN (SELECT ...)` on single-table, unaggregated queries | `EXISTS` subqueries and queries using `GROUP BY`/`HAVING`/aggregates are ignored |
+| **AP-06** | `UNION_WITHOUT_ALL` | `UNION` statements without `ALL` that cause implicit sorting | `UNION ALL` statements are ignored |
 
 ---
 
