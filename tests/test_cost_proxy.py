@@ -52,3 +52,11 @@ class TestCostProxy:
         sql = "UPPER(name) = 'FOO'"
         signal = evaluate_cost_signal(sql)
         assert signal == "NOT_EVALUATED"
+
+    def test_close_clears_cached_results(self):
+        evaluate_cost_signal("SELECT id FROM orders WHERE customer_id = 1;")
+        assert evaluate_cost_signal.cache_info().currsize == 1
+
+        close()
+
+        assert evaluate_cost_signal.cache_info().currsize == 0

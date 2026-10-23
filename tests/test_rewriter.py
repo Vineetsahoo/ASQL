@@ -43,6 +43,14 @@ class TestRewriter:
         for col in SCHEMA_MAP["orders"]:
             assert col in rewritten
 
+    def test_nested_selects_keep_table_columns_scoped(self):
+        sql = "SELECT * FROM orders o JOIN customers c ON o.customer_id = c.id WHERE EXISTS (SELECT * FROM products p WHERE p.id = o.id);"
+        rewritten = rewrite_select_star(sql)
+        assert rewritten is not None
+        assert "o.total_amount" in rewritten
+        assert "c.email" in rewritten
+        assert "p.price" not in rewritten
+
     def test_no_star_returns_none(self):
         sql = "SELECT id, name FROM customers WHERE city = 'Boston';"
         rewritten = rewrite_select_star(sql)
@@ -62,3 +70,22 @@ class TestRewriter:
         sql = "NOT A VALID SQL STATEMENT !!!"
         rewritten = rewrite_select_star(sql)
         assert rewritten is None
+
+    def test_table_star_expansion(self):
+        sql = "SELECT o.* FROM orders o;"
+        rewritten = rewrite_select_star(sql)
+        assert rewritten is not None
+        assert "o.id" in rewritten
+        assert "o.customer_id" in rewritten
+
+    def test_table_star_unknown_table(self):
+        sql = "SELECT u.* FROM unknown_table u;"
+        rewritten = rewrite_select_star(sql)
+        assert rewritten is None
+        
+    def test_table_star_mixed(self):
+        sql = "SELECT o.*, u.* FROM orders o CROSS JOIN unknown_table u;"
+        rewritten = rewrite_select_star(sql)
+        assert rewritten is not None
+        assert "o.id" in rewritten
+        assert "u.*" in rewritten

@@ -63,6 +63,12 @@ class TestSelectStarRule:
         findings = rule.detect(ast, "test.sql")
         assert len(findings) == 0
 
+    def test_anonymous_func_star(self, rule):
+        sql = "SELECT my_func(*) FROM orders;"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 0
+
 
 class TestNonSargablePredicateRule:
     """Tests for AP-02: Non-sargable predicate detection."""
@@ -127,6 +133,18 @@ class TestNonSargablePredicateRule:
         ast = sqlglot.parse_one(sql)
         findings = rule.detect(ast, "test.sql")
         assert len(findings) == 0
+
+    def test_nested_column_argument(self, rule):
+        sql = "SELECT * FROM orders WHERE UPPER(CAST(name AS varchar)) = 'JOHN';"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 1
+
+    def test_duplicate_function_call(self, rule):
+        sql = "SELECT * FROM orders WHERE UPPER(name) = 'JOHN' OR UPPER(name) = 'DOE';"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 2
 
 
 class TestUnnecessarySubqueryRule:
@@ -194,6 +212,91 @@ class TestUnnecessarySubqueryRule:
     def test_in_literal_list_negative_control(self, rule):
         """IN with literal values must NOT trigger AP-05."""
         sql = "SELECT id, name FROM customers WHERE id IN (1, 2, 3, 4, 5);"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 0
+
+    def test_in_subquery_multiple_columns(self, rule):
+        sql = "SELECT * FROM customers WHERE (id, name) IN (SELECT id, name FROM orders);"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 0
+
+    def test_in_select_node(self, rule):
+        ast = sqlglot.parse_one("SELECT * FROM customers WHERE id IN (SELECT id FROM orders)")
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 1
+
+class TestCartesianJoinRule:
+    @pytest.fixture
+    def rule(self):
+        from engine.rules import CartesianJoinRule
+        return CartesianJoinRule()
+
+    def test_cross_join(self, rule):
+        sql = "SELECT * FROM a CROSS JOIN b;"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 1
+
+    def test_missing_on_using(self, rule):
+        sql = "SELECT * FROM a JOIN b;"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 1
+
+    def test_natural_join(self, rule):
+        sql = "SELECT * FROM a NATURAL JOIN b;"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 0
+
+class TestLeadingWildcardRule:
+    @pytest.fixture
+    def rule(self):
+        from engine.rules import LeadingWildcardRule
+        return LeadingWildcardRule()
+
+    def test_leading_percent(self, rule):
+        sql = "SELECT * FROM users WHERE name LIKE '%john';"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 1
+        assert findings[0].rule_id == "AP-04"
+
+    def test_leading_underscore(self, rule):
+        sql = "SELECT * FROM users WHERE name LIKE '_john';"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 1
+
+    def test_trailing_wildcard_negative_control(self, rule):
+        sql = "SELECT * FROM users WHERE name LIKE 'john%';"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 0
+
+    def test_no_wildcard_negative_control(self, rule):
+        sql = "SELECT * FROM users WHERE name LIKE 'john';"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 0
+
+class TestUnionWithoutAllRule:
+    @pytest.fixture
+    def rule(self):
+        from engine.rules import UnionWithoutAllRule
+        return UnionWithoutAllRule()
+
+    def test_union_without_all(self, rule):
+        sql = "SELECT id FROM users UNION SELECT id FROM customers;"
+        ast = sqlglot.parse_one(sql)
+        findings = rule.detect(ast, "test.sql")
+        assert len(findings) == 1
+        assert findings[0].rule_id == "AP-06"
+
+    def test_union_all_negative_control(self, rule):
+        sql = "SELECT id FROM users UNION ALL SELECT id FROM customers;"
         ast = sqlglot.parse_one(sql)
         findings = rule.detect(ast, "test.sql")
         assert len(findings) == 0

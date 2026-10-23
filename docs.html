@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASQL - Web3 Documentation</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Roboto+Mono:wght@400&display=swap" rel="stylesheet">
+    <!-- GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Lenis Smooth Scroll -->
+    <script src="https://cdn.jsdelivr.net/gh/studio-freight/lenis@1.0.27/bundled/lenis.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #FF0000;
+            --primary-glow: rgba(255, 0, 0, 0.6);
+            --bg-dark: #030303;
+            --surface: rgba(15, 15, 15, 0.5);
+            --text-main: #FFFFFF;
+            --text-muted: #888888;
+            --border: rgba(255, 255, 255, 0.08);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html.lenis { height: auto; }
+        .lenis.lenis-smooth { scroll-behavior: auto !important; }
+        .lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+        .lenis.lenis-stopped { overflow: hidden; }
+        .lenis.lenis-scrolling iframe { pointer-events: none; }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* WebGL Canvas */
+        #webgl-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Glassmorphism */
+        .glass {
+            background: var(--surface);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--border);
+        }
+
+        /* Top Nav */
+        .top-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 4rem;
+            z-index: 100;
+            border-bottom: 1px solid transparent;
+            transition: border-bottom 0.3s, background 0.3s;
+        }
+        .top-nav.scrolled {
+            background: rgba(3, 3, 3, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-main);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            letter-spacing: -1px;
+        }
+        .logo span {
+            color: transparent;
+            -webkit-text-stroke: 1px var(--primary);
+        }
+
+        /* Layout */
+        .layout {
+            display: flex;
+            padding-top: 80px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            position: fixed;
+            top: 80px;
+            bottom: 0;
+            left: 0;
+            padding: 3rem 2rem;
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+        }
+
+        .nav-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        .nav-group { margin-bottom: 3rem; }
+        .nav-links { list-style: none; }
+        .nav-links li { margin-bottom: 8px; }
+        .nav-links a {
+            display: inline-block;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: 500;
+            transition: color 0.3s ease, transform 0.3s ease;
+            position: relative;
+        }
+        .nav-links a:hover, .nav-links a.active {
+            color: var(--text-main);
+            transform: translateX(10px);
+        }
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -2px; left: 0;
+            width: 0%; height: 2px;
+            background: var(--primary);
+            transition: width 0.3s ease;
+        }
+        .nav-links a:hover::after, .nav-links a.active::after {
+            width: 100%;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 300px;
+            padding: 4rem 10%;
+            max-width: 1400px;
+        }
+
+        /* Hero */
+        .hero { 
+            min-height: 80vh; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center;
+            position: relative;
+        }
+        
+        .hero h1 {
+            font-size: clamp(4rem, 8vw, 8rem);
+            font-weight: 700;
+            line-height: 0.9;
+            margin-bottom: 2rem;
+            text-transform: uppercase;
+            letter-spacing: -2px;
+        }
+        
+        .hero h1 .outline {
+            color: transparent;
+            -webkit-text-stroke: 1px rgba(255,255,255,0.3);
+            display: block;
+        }
+        
+        .hero h1 .accent {
+            color: var(--primary);
+            text-shadow: 0 0 40px var(--primary-glow);
+        }
+
+        .hero p {
+            font-size: 1.5rem;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin-bottom: 3rem;
+            font-weight: 400;
+            line-height: 1.4;
+        }
+
+        /* Magnetic Web3 Button */
+        .btn-wrapper { display: inline-block; }
+        .btn-web3 {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 40px;
+            height: 64px;
+            background: rgba(255,0,0,0.1);
+            border: 1px solid var(--primary);
+            color: #FFF;
+            text-decoration: none;
+            border-radius: 100px;
+            font-weight: 600;
+            font-size: 16px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 20px rgba(255,0,0,0.2);
+        }
+        .btn-web3::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: var(--primary);
+            transition: left 0.4s cubic-bezier(0.8, 0, 0.2, 1);
+            z-index: -1;
+        }
+        .btn-web3:hover::before {
+            left: 0;
+        }
+        .btn-web3:hover {
+            color: #000;
+            box-shadow: 0 0 40px rgba(255,0,0,0.6);
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: 10rem;
+            position: relative;
+        }
+        
+        .section-title-wrap {
+            overflow: hidden;
+            margin-bottom: 3rem;
+        }
+        
+        .section h2 {
+            font-size: clamp(2.5rem, 4vw, 4rem);
+            font-weight: 700;
+            letter-spacing: -1px;
+            display: inline-block;
+        }
+        
+        .section h2 .dot {
+            color: var(--primary);
+        }
+
+        /* Grid */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2rem;
+        }
+
+        .web3-card {
+            background: rgba(10, 10, 10, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            padding: 3rem 2rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        
+        .web3-card::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(circle at center, rgba(255,0,0,0.1) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .web3-card:hover {
+            transform: translateY(-10px) scale(1.02);
+            border-color: rgba(255, 0, 0, 0.3);
+            background: rgba(20, 20, 20, 0.6);
+        }
+        .web3-card:hover::before { opacity: 1; }
+
+        .card-icon {
+            font-size: 48px;
+            margin-bottom: 24px;
+            position: relative;
+            z-index: 1;
+            display: inline-block;
+            background: linear-gradient(135deg, #FFF, #888);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .web3-card h3 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .web3-card p {
+            color: var(--text-muted);
+            font-size: 16px;
+            position: relative;
+            z-index: 1;
+            line-height: 1.6;
+        }
+
+        /* Code Block */
+        .code-container {
+            position: relative;
+            margin-top: 2rem;
+        }
+        
+        .code-container::before {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            background: linear-gradient(90deg, var(--primary), transparent);
+            border-radius: 17px;
+            z-index: -1;
+            opacity: 0.5;
+        }
+
+        pre {
+            background: #000;
+            padding: 2rem;
+            border-radius: 16px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 15px;
+            color: #E0E0E0;
+            overflow-x: auto;
+        }
+        
+        .token.keyword { color: #FF3366; font-weight: bold; }
+        .token.string { color: #00E676; }
+        .token.comment { color: #666; font-style: italic; }
+        .token.function { color: #448AFF; }
+
+    </style>
+</head>
+<body>
+
+    <!-- WebGL Background -->
+    <canvas id="webgl-canvas"></canvas>
+
+    <nav class="top-nav" id="topNav">
+        <a href="#" class="logo">ASQL <span>DOCS</span></a>
+    </nav>
+
+    <div class="layout">
+        <aside class="sidebar glass" id="sidebar">
+            <div class="nav-group">
+                <div class="nav-title">Introduction</div>
+                <ul class="nav-links">
+                    <li><a href="#overview" class="active">Overview</a></li>
+                    <li><a href="#getting-started">Getting Started</a></li>
+                </ul>
+            </div>
+            
+            <div class="nav-group">
+                <div class="nav-title">Features & UI</div>
+                <ul class="nav-links">
+                    <li><a href="#design-system">Web3 Design</a></li>
+                    <li><a href="#gsap-animations">Interactivity</a></li>
+                </ul>
+            </div>
+
+            <div class="nav-group">
+                <div class="nav-title">Anti-Patterns</div>
+                <ul class="nav-links">
+                    <li><a href="#n-plus-one">N+1 Queries</a></li>
+                    <li><a href="#table-scans">Full Table Scans</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            
+            <section class="hero section" id="overview">
+                <h1 class="reveal-text">
+                    <span class="outline">High-Performance</span>
+                    <span class="accent">SQL Analysis</span>
+                </h1>
+                <p class="reveal-fade">ASQL is a modern, blazing-fast tool designed to automatically detect, analyze, and report SQL anti-patterns in your codebase, packaged in a premium Web3 interface.</p>
+                <div class="btn-wrapper reveal-fade">
+                    <a href="report.html" class="btn-web3" id="magneticBtn">
+                        <span>View Live Dashboard</span>
+                    </a>
+                </div>
+            </section>
+
+            <section class="section" id="design-system">
+                <div class="section-title-wrap">
+                    <h2 class="reveal-title">Web3 Aesthetic<span class="dot">.</span></h2>
+                </div>
+                <p style="max-width: 600px; font-size: 1.2rem; color: #888; margin-bottom: 3rem;">Drawing inspiration from top-tier cinematic interfaces and Web3 platforms, we implemented a dark, immersive, grid-driven UI that breaks boundaries.</p>
+                
+                <div class="grid">
+                    <div class="web3-card stagger-card">
+                        <div class="card-icon">⚡</div>
+                        <h3>Signature Red</h3>
+                        <p>Using vivid neon red sparingly to draw attention to critical insights and interactive elements against a deep dark canvas.</p>
+                    </div>
+                    <div class="web3-card stagger-card">
+                        <div class="card-icon">🌌</div>
+                        <h3>Spatial Layout</h3>
+                        <p>A structure that pushes the data to the forefront, utilizing vast negative space, blur effects, and precise typography.</p>
+                    </div>
+                    <div class="web3-card stagger-card">
+                        <div class="card-icon">🏗️</div>
+                        <h3>Grotesk Architecture</h3>
+                        <p>Engineered with the Space Grotesk font family for maximum legibility and a stark, industrial developer aesthetic.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section" id="table-scans">
+                <div class="section-title-wrap">
+                    <h2 class="reveal-title">Detecting Full Table Scans<span class="dot">.</span></h2>
+                </div>
+                <p style="max-width: 600px; font-size: 1.2rem; color: #888; margin-bottom: 2rem;">One of the primary features of ASQL is detecting queries that bypass indexes. This typically occurs when utilizing wildcard searches or functions on indexed columns.</p>
+                
+                <div class="code-container stagger-card">
+<pre><code><span class="token comment">-- Anti-Pattern: Using a function on an indexed column</span>
+<span class="token keyword">SELECT</span> * <span class="token keyword">FROM</span> users <span class="token keyword">WHERE</span> <span class="token function">LOWER</span>(email) = <span class="token string">'test@example.com'</span>;
+
+<span class="token comment">-- Optimized: Store lowercase emails or use a generated column</span>
+<span class="token keyword">SELECT</span> * <span class="token keyword">FROM</span> users <span class="token keyword">WHERE</span> email = <span class="token string">'test@example.com'</span>;
+</code></pre>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        // 1. Initialize Lenis Smooth Scrolling
+        const lenis = new Lenis({
+            duration: 1.2,
+            easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+            direction: 'vertical',
+            gestureDirection: 'vertical',
+            smooth: true,
+            mouseMultiplier: 1,
+            smoothTouch: false,
+            touchMultiplier: 2,
+            infinite: false,
+        });
+
+        function raf(time) {
+            lenis.raf(time);
+            requestAnimationFrame(raf);
+        }
+        requestAnimationFrame(raf);
+
+        // Sync GSAP ScrollTrigger with Lenis
+        gsap.registerPlugin(ScrollTrigger);
+        
+        lenis.on('scroll', ScrollTrigger.update);
+        gsap.ticker.add((time)=>{
+            lenis.raf(time * 1000);
+        });
+        gsap.ticker.lagSmoothing(0);
+
+        // Navbar Scroll Effect
+        const topNav = document.getElementById('topNav');
+        lenis.on('scroll', (e) => {
+            if (e.scroll > 50) {
+                topNav.classList.add('scrolled');
+            } else {
+                topNav.classList.remove('scrolled');
+            }
+        });
+
+        // 2. Three.js Crazy WebGL Scene
+        const initWebGL = () => {
+            const canvas = document.getElementById('webgl-canvas');
+            const scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x030303, 0.001);
+
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 30;
+
+            const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+            // Group for rotation
+            const group = new THREE.Group();
+            scene.add(group);
+
+            // Shape 1: Outer Icosahedron Wireframe
+            const geo1 = new THREE.IcosahedronGeometry(12, 1);
+            const mat1 = new THREE.MeshBasicMaterial({ 
+                color: 0x333333, 
+                wireframe: true, 
+                transparent: true, 
+                opacity: 0.3 
+            });
+            const mesh1 = new THREE.Mesh(geo1, mat1);
+            group.add(mesh1);
+
+            // Shape 2: Inner complex TorusKnot
+            const geo2 = new THREE.TorusKnotGeometry(6, 1.5, 200, 32, 2, 3);
+            const mat2 = new THREE.MeshStandardMaterial({
+                color: 0x111111,
+                roughness: 0.1,
+                metalness: 0.9,
+                wireframe: true,
+                emissive: 0xFF0000,
+                emissiveIntensity: 0.2
+            });
+            const mesh2 = new THREE.Mesh(geo2, mat2);
+            group.add(mesh2);
+
+            // Floating Particles
+            const particlesGeo = new THREE.BufferGeometry();
+            const particlesCount = 700;
+            const posArray = new Float32Array(particlesCount * 3);
+            for(let i=0; i < particlesCount * 3; i++) {
+                posArray[i] = (Math.random() - 0.5) * 80;
+            }
+            particlesGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            const particlesMat = new THREE.PointsMaterial({
+                size: 0.05,
+                color: 0xFF0000,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+            const particlesMesh = new THREE.Points(particlesGeo, particlesMat);
+            scene.add(particlesMesh);
+
+            // Lighting
+            const ambient = new THREE.AmbientLight(0xffffff, 0.2);
+            scene.add(ambient);
+            const pointLight = new THREE.PointLight(0xFF0000, 5, 50);
+            pointLight.position.set(0, 0, 0);
+            group.add(pointLight);
+
+            // Initial positioning (to the right)
+            group.position.x = 10;
+            group.position.y = -2;
+
+            // ScrollTrigger Animation for the 3D Group
+            gsap.to(group.rotation, {
+                y: Math.PI * 2,
+                x: Math.PI,
+                ease: "none",
+                scrollTrigger: {
+                    trigger: "body",
+                    start: "top top",
+                    end: "bottom bottom",
+                    scrub: 1
+                }
+            });
+
+            gsap.to(group.position, {
+                y: 10, // Moves up as we scroll down
+                ease: "none",
+                scrollTrigger: {
+                    trigger: "body",
+                    start: "top top",
+                    end: "bottom bottom",
+                    scrub: 1
+                }
+            });
+
+            // Mouse interaction for parallax
+            let mouseX = 0, mouseY = 0;
+            document.addEventListener('mousemove', (e) => {
+                mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+                mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+            });
+
+            const clock = new THREE.Clock();
+
+            const animate = () => {
+                requestAnimationFrame(animate);
+                const time = clock.getElapsedTime();
+
+                // Idle spinning
+                mesh1.rotation.x = time * 0.1;
+                mesh1.rotation.y = time * 0.15;
+                
+                mesh2.rotation.x = -time * 0.2;
+                mesh2.rotation.z = time * 0.1;
+
+                particlesMesh.rotation.y = time * 0.05;
+
+                // Parallax
+                camera.position.x += (mouseX * 2 - camera.position.x) * 0.05;
+                camera.position.y += (-mouseY * 2 - camera.position.y) * 0.05;
+                camera.lookAt(scene.position);
+
+                renderer.render(scene, camera);
+            };
+            animate();
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        };
+        initWebGL();
+
+        // 3. Advanced GSAP Animations
+        // Custom text reveal using clip-path
+        gsap.utils.toArray('.reveal-text span').forEach((span, i) => {
+            gsap.fromTo(span, 
+                { y: 100, opacity: 0, clipPath: "polygon(0 0, 100% 0, 100% 0%, 0% 0%)" },
+                { 
+                    y: 0, 
+                    opacity: 1, 
+                    clipPath: "polygon(0 0, 100% 0, 100% 100%, 0% 100%)",
+                    duration: 1.2,
+                    ease: "power4.out",
+                    delay: 0.2 + (i * 0.15)
+                }
+            );
+        });
+
+        gsap.from(".reveal-fade", {
+            y: 40,
+            opacity: 0,
+            duration: 1,
+            stagger: 0.2,
+            ease: "power3.out",
+            delay: 0.8
+        });
+
+        // Sidebar Links
+        gsap.from(".nav-links li", {
+            x: -30,
+            opacity: 0,
+            duration: 0.8,
+            stagger: 0.1,
+            ease: "power3.out",
+            delay: 1
+        });
+
+        // Scroll reveals for section titles
+        gsap.utils.toArray('.reveal-title').forEach(title => {
+            gsap.from(title, {
+                scrollTrigger: {
+                    trigger: title,
+                    start: "top 85%",
+                },
+                y: 50,
+                opacity: 0,
+                clipPath: "polygon(0 0, 100% 0, 100% 0%, 0% 0%)",
+                duration: 1,
+                ease: "power4.out"
+            });
+        });
+
+        // Grid Cards
+        gsap.utils.toArray('.grid').forEach(grid => {
+            const cards = grid.querySelectorAll('.stagger-card');
+            gsap.from(cards, {
+                scrollTrigger: {
+                    trigger: grid,
+                    start: "top 80%"
+                },
+                y: 80,
+                opacity: 0,
+                duration: 1,
+                stagger: 0.15,
+                ease: "power3.out"
+            });
+        });
+
+        // Code block
+        gsap.utils.toArray('.code-container').forEach(code => {
+            gsap.from(code, {
+                scrollTrigger: {
+                    trigger: code,
+                    start: "top 85%"
+                },
+                y: 40,
+                opacity: 0,
+                scale: 0.98,
+                duration: 1,
+                ease: "power3.out"
+            });
+        });
+
+        // Magnetic Button Logic
+        const magneticBtn = document.getElementById('magneticBtn');
+        if (magneticBtn) {
+            magneticBtn.addEventListener('mousemove', (e) => {
+                const rect = magneticBtn.getBoundingClientRect();
+                const x = (e.clientX - rect.left) - rect.width / 2;
+                const y = (e.clientY - rect.top) - rect.height / 2;
+                
+                gsap.to(magneticBtn, {
+                    x: x * 0.4,
+                    y: y * 0.4,
+                    duration: 0.6,
+                    ease: "power3.out"
+                });
+            });
+
+            magneticBtn.addEventListener('mouseleave', () => {
+                gsap.to(magneticBtn, {
+                    x: 0,
+                    y: 0,
+                    duration: 0.8,
+                    ease: "elastic.out(1, 0.3)"
+                });
+            });
+        }
+
+        // Active State Logic
+        const sections = document.querySelectorAll("section[id]");
+        const navLinks = document.querySelectorAll(".nav-links a");
+
+        lenis.on("scroll", () => {
+            let current = "";
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (window.scrollY >= sectionTop - 200) {
+                    current = section.getAttribute("id");
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove("active");
+                if (link.getAttribute("href").includes(current)) {
+                    link.classList.add("active");
+                }
+            });
+        });
+    </script>
+</body>
+</html>

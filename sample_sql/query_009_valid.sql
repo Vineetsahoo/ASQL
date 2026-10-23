@@ -1,0 +1,1 @@
+SELECT c.city, SUM(oi.quantity * oi.unit_price) as total_revenue FROM customers c INNER JOIN orders o ON c.id = o.customer_id INNER JOIN order_items oi ON o.id = oi.order_id WHERE o.order_date >= '2023-01-01' GROUP BY c.city HAVING SUM(oi.quantity * oi.unit_price) > 500 ORDER BY total_revenue DESC LIMIT 5;

@@ -35,24 +35,54 @@
     morekeywords={EXPLAIN, QUERY, PLAN, COALESCE, TRIM, YEAR, STRFTIME},
     sensitive=false
 }
-
+\makeatletter
+\newcommand{\linebreakand}{%
+  \end{@IEEEauthorhalign}
+  \hfill\mbox{}\par
+  \mbox{}\hfill\begin{@IEEEauthorhalign}
+}
+\makeatother
 \begin{document}
 
 \title{Static Code Analysis and Automated Semantic Rewriting for SQL Anti-Pattern Mitigation: An AST-Driven Approach}
 
-\author{\IEEEauthorblockN{Aradhya Rahul Pandey}
+\author{
+\IEEEauthorblockN{Aradhya Rahul Pandey}
 \IEEEauthorblockA{\textit{Computational Intelligence} \\
-\textit{SRM Institute of Science and Technology} \\
+\textit{SRM Institute of Science} \\
+\textit{and Technology} \\
 aradhyarahulpandey@gmail.com}
-}
 \and
-\IEEEauthorblockN{Dr. Saravan P}
-\IEEEauthorblockA{
-\textit{Department of Software Engineering}\\
-\textit{SRM Institute of Science and Technology}\\
-
+\IEEEauthorblockN{Dr. Saravanan P}
+\IEEEauthorblockA{\textit{Computing Technology} \\
+\textit{SRM Institute of Science} \\
+\textit{and Technology} \\
+saravanp7@srmist.edu.in}
+\and
+\IEEEauthorblockN{Kartik Gupta}
+\IEEEauthorblockA{\textit{Computational Intelligence} \\
+\textit{SRM Institute of Science} \\
+\textit{and Technology} \\
+kg2834@srmist.edu.in}
+\linebreakand
+\IEEEauthorblockN{Vineet Sahoo}
+\IEEEauthorblockA{\textit{Computational Intelligence} \\
+\textit{SRM Institute of Science} \\
+\textit{and Technology} \\
+vs1023@srmist.edu.in}
+\and
+\IEEEauthorblockN{Ayush Gaurav}
+\IEEEauthorblockA{\textit{Computational Intelligence} \\
+\textit{SRM Institute of Science} \\
+\textit{and Technology} \\
+ag5705@srmist.edu.in}
+\and
+\IEEEauthorblockN{Saumye Singh}
+\IEEEauthorblockA{\textit{Computational Intelligence} \\
+\textit{SRM Institute of Science} \\
+\textit{and Technology} \\
+ss0641@srmist.edu.in}
 }
-
 \maketitle
 
 \begin{abstract}
@@ -189,11 +219,10 @@ Algorithm~\ref{alg:nonsargable} formalizes the detection routine for \texttt{AP-
         \IF{$\text{fn\_name} \in \mathcal{W}$}
             \STATE $\text{has\_col} \leftarrow \text{FALSE}$
             \FORALL{$\text{arg} \in \text{Arguments}(v_{\text{fn}})$}
-                \IF{$\text{Type}(\text{arg}) = \texttt{Column}$}
-                    \STATE $\text{has\_col} \leftarrow \text{TRUE}$
-                    \BREAK
-                \ENDIF
-            \ENDFOR
+    \IF{$\text{Type}(\text{arg}) = \texttt{Column}$}
+        \STATE $\text{has\_col} \leftarrow \text{TRUE}$; \textbf{break}
+    \ENDIF
+\ENDFOR
             \IF{$\text{has\_col} = \text{TRUE}$}
                 \STATE $(l, c) \leftarrow \text{GetSourceCoordinate}(v_{\text{fn}})$
                 \STATE $f \leftarrow \text{CreateFinding}(\text{Rule}=\text{AP-02}, \text{Line}=l, \text{Col}=c)$
