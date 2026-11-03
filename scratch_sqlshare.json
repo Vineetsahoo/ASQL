@@ -1,0 +1,17 @@
+[
+  {
+    "rule_id": "AP-02",
+    "rule_name": "NON_SARGABLE_PREDICATE",
+    "file": "benchmarks\\sqlshare\\other.sql",
+    "line": 1,
+    "column": 410,
+    "snippet": "DATEADD(dd, -90, CAST('1998-12-01' AS DATETIME))",
+    "message": "Function DATEADD() wraps a column reference in a predicate. This prevents index usage (non-sargable). Consider rewriting to apply the function to the comparison value instead.",
+    "confidence": 0.85,
+    "rewrite_sql": null,
+    "cost_signal": "NOT_EVALUATED",
+    "finding_id": "d827376e-8069-4cb4-bd14-2680694a445f",
+    "severity": "HIGH",
+    "alternative_solution": "Invert predicates so functions operate on constants/literals rather than column references (SARGable rewrite). For example, transform YEAR(order_date) = 2024 into date range order_date >= '2024-01-01' AND order_date < '2025-01-01'. For case-insensitivity, utilize case-insensitive collations (e.g. COLLATE NOCASE) or functional indexes."
+  }
+]

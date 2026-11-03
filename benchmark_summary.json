@@ -1,0 +1,147 @@
+{
+  "sample_sql": {
+    "path": "sample_sql",
+    "files_scanned": 215,
+    "total_findings": 212,
+    "clean_queries": 67,
+    "flagged_queries": 146,
+    "warning_queries": 2,
+    "rewrites_synthesized": 169,
+    "elapsed_seconds": 0.477,
+    "rule_breakdown": {
+      "AP-01": 71,
+      "AP-02": 40,
+      "AP-03": 25,
+      "AP-05": 64,
+      "AP-06": 7,
+      "AP-04": 5
+    },
+    "cost_breakdown": {
+      "FULL_SCAN_DETECTED": 162,
+      "NOT_EVALUATED": 10,
+      "INDEX_USED": 40
+    },
+    "severity_breakdown": {
+      "HIGH": 111,
+      "CRITICAL": 30,
+      "MEDIUM": 64,
+      "LOW": 7
+    }
+  },
+  "spider": {
+    "path": "benchmarks\\spider",
+    "files_scanned": 1036,
+    "total_findings": 613,
+    "clean_queries": 966,
+    "flagged_queries": 70,
+    "warning_queries": 0,
+    "rewrites_synthesized": 551,
+    "elapsed_seconds": 8.2329,
+    "rule_breakdown": {
+      "AP-05": 366,
+      "AP-04": 86,
+      "AP-06": 89,
+      "AP-01": 72
+    },
+    "cost_breakdown": {
+      "NOT_EVALUATED": 605,
+      "FULL_SCAN_DETECTED": 8
+    },
+    "severity_breakdown": {
+      "MEDIUM": 366,
+      "CRITICAL": 86,
+      "LOW": 89,
+      "HIGH": 72
+    }
+  },
+  "bird": {
+    "path": "benchmarks\\bird",
+    "files_scanned": 1503,
+    "total_findings": 263,
+    "clean_queries": 1306,
+    "flagged_queries": 173,
+    "warning_queries": 24,
+    "rewrites_synthesized": 133,
+    "elapsed_seconds": 3.3152,
+    "rule_breakdown": {
+      "AP-02": 146,
+      "AP-03": 27,
+      "AP-05": 37,
+      "AP-04": 36,
+      "AP-01": 17
+    },
+    "cost_breakdown": {
+      "NOT_EVALUATED": 263
+    },
+    "severity_breakdown": {
+      "HIGH": 163,
+      "CRITICAL": 63,
+      "MEDIUM": 37
+    }
+  },
+  "job": {
+    "path": "benchmarks\\join-order-benchmark",
+    "files_scanned": 115,
+    "total_findings": 1012,
+    "clean_queries": 2,
+    "flagged_queries": 113,
+    "warning_queries": 0,
+    "rewrites_synthesized": 1012,
+    "elapsed_seconds": 1.1213,
+    "rule_breakdown": {
+      "AP-03": 864,
+      "AP-04": 148
+    },
+    "cost_breakdown": {
+      "NOT_EVALUATED": 1012
+    },
+    "severity_breakdown": {
+      "CRITICAL": 1012
+    }
+  },
+  "tpch": {
+    "path": "benchmarks\\tpch",
+    "files_scanned": 27,
+    "total_findings": 0,
+    "clean_queries": 0,
+    "flagged_queries": 0,
+    "warning_queries": 27,
+    "rewrites_synthesized": 0,
+    "elapsed_seconds": 0.0327,
+    "rule_breakdown": {},
+    "cost_breakdown": {},
+    "severity_breakdown": {}
+  },
+  "sqlshare": {
+    "path": "benchmarks\\sqlshare",
+    "files_scanned": 4,
+    "total_findings": 1,
+    "clean_queries": 0,
+    "flagged_queries": 1,
+    "warning_queries": 3,
+    "rewrites_synthesized": 0,
+    "elapsed_seconds": 0.0549,
+    "rule_breakdown": {
+      "AP-02": 1
+    },
+    "cost_breakdown": {
+      "NOT_EVALUATED": 1
+    },
+    "severity_breakdown": {
+      "HIGH": 1
+    }
+  },
+  "ermrest": {
+    "path": "benchmarks\\ermrest",
+    "files_scanned": 6,
+    "total_findings": 0,
+    "clean_queries": 0,
+    "flagged_queries": 0,
+    "warning_queries": 6,
+    "rewrites_synthesized": 0,
+    "elapsed_seconds": 0.2196,
+    "rule_breakdown": {},
+    "cost_breakdown": {},
+    "severity_breakdown": {}
+  }
+}
